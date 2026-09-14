@@ -487,6 +487,9 @@ LangSmith现在支持OpenTelemetry格式，可以用OTEL标准收集Trace再导�
 
 Python版预估QPS：50-100（受LLM API限制）
 Go版预估QPS：200-500（Go本身开销极低，主要还是LLM瓶颈）
+Node.js版预估QPS：100-300（I/O型Agent链路下事件循环开销低，最终仍受LLM限流和延迟约束）
+
+Node.js压测时还要关注事件循环延迟（Event Loop Lag）。同步CPU计算、大JSON序列化或阻塞式SDK会拖慢同进程内的所有请求；可使用Worker Thread、流式解析或拆分计算服务处理。
 
 ---
 

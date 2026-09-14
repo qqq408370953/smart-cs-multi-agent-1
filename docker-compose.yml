@@ -62,6 +62,18 @@ services:
       redis:
         condition: service_healthy
 
+  # Node.js实现
+  node-agent:
+    build:
+      context: ./node-impl
+      dockerfile: Dockerfile
+    ports:
+      - "8100:8100"
+    environment:
+      - PORT=8100
+      - SHORT_TERM_MAX_TURNS=20
+      - SHORT_TERM_TTL_SECONDS=1800
+
   # Jaeger - 全链路追踪可视化 (可选)
   jaeger:
     image: jaegertracing/all-in-one:1.62

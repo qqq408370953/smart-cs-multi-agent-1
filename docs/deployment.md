@@ -36,6 +36,18 @@ go run main.go
 
 访问: http://localhost:8090/health
 
+### Node.js版本
+
+```bash
+cd node-impl
+# Node.js 20+，当前实现无第三方运行时依赖
+npm start
+```
+
+访问: http://localhost:8100/health
+
+开发时可使用 `npm run dev` 启用 Node.js watch 模式，运行 `npm test` 执行接口与核心模块测试。
+
 ## 2. Docker部署
 
 ### 单服务启动
@@ -56,6 +68,11 @@ docker run -p 8080:8080 -e OPENAI_API_KEY=xxx smart-cs-java
 cd go-impl
 docker build -t smart-cs-go .
 docker run -p 8090:8090 smart-cs-go
+
+# Node.js
+cd node-impl
+docker build -t smart-cs-node .
+docker run -p 8100:8100 smart-cs-node
 ```
 
 ### Docker Compose 一键启动
@@ -66,7 +83,7 @@ docker-compose up -d
 
 ## 3. API接口说明
 
-所有三个版本提供统一的REST API：
+所有四个版本提供统一的REST API。Node.js 版本还提供 SSE 与 JSON-RPC 2.0 入口：
 
 ### POST /api/chat — 聊天接口
 
@@ -91,6 +108,38 @@ docker-compose up -d
 
 ### GET /api/tools — MCP工具列表
 
+### POST /api/tools/call — MCP工具调用
+
+```json
+{
+  "name": "risk_check",
+  "arguments": {
+    "user_id": "user_001",
+    "action": "transfer",
+    "amount": 60000
+  }
+}
+```
+
+### POST /api/chat/stream — SSE聊天接口（Node.js）
+
+```bash
+curl -N -X POST http://localhost:8100/api/chat/stream \
+  -H 'Content-Type: application/json' \
+  -d '{"message":"理财产品的投资期限是多久？"}'
+```
+
+### POST /mcp — MCP JSON-RPC 2.0入口（Node.js）
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "tools/list",
+  "params": {}
+}
+```
+
 ### GET /api/metrics — 系统指标
 
 ### GET /health — 健康检查
@@ -105,3 +154,9 @@ docker-compose up -d
 | REDIS_URL | Redis地址 | redis://localhost:6379/0 |
 | OTEL_SERVICE_NAME | 追踪服务名 | smart-cs-multi-agent |
 | OTEL_EXPORTER_OTLP_ENDPOINT | OTLP端点 | http://localhost:4317 |
+| HOST | Node.js监听地址 | 0.0.0.0 |
+| PORT | 服务端口（各实现可覆盖） | Node.js为8100 |
+| SHORT_TERM_MAX_TURNS | Node.js短期记忆最大消息数 | 20 |
+| SHORT_TERM_TTL_SECONDS | Node.js短期记忆TTL（秒） | 1800 |
+
+Node.js 当前实现不要求 `OPENAI_API_KEY`、Redis 或 OTLP 服务即可启动，适合本地演示和接口联调。接入生产级 LLM、Redis 和 OpenTelemetry 后，再配置对应的公共环境变量。

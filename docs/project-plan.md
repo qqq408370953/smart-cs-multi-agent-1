@@ -45,7 +45,7 @@ graph TD
     Supervisor --> observability
 ```
 
-## 二、项目结构设计（三语言实现）
+## 二、项目结构设计（四语言实现）
 
 ```
 smart-cs-multi-agent/
@@ -101,6 +101,20 @@ smart-cs-multi-agent/
 │   ├── go.mod
 │   ├── main.go
 │   └── Dockerfile
+│
+├── node-impl/                         # Node.js实现 (原生ESM)
+│   ├── src/
+│   │   ├── agents/                    # Supervisor与业务Agent
+│   │   ├── memory/                    # Map实现的三层记忆抽象
+│   │   ├── mcp/                       # MCP JSON-RPC服务
+│   │   ├── tracing/                   # 调用追踪与聚合指标
+│   │   ├── api/                       # REST + SSE服务
+│   │   ├── app.js                     # 依赖装配
+│   │   └── main.js                    # 程序入口
+│   ├── test/                          # node:test集成测试
+│   ├── package.json
+│   ├── Dockerfile
+│   └── .env.example
 │
 └── docker-compose.yml                 # 一键启动全部服务
 ```
@@ -180,18 +194,21 @@ smart-cs-multi-agent/
 - "系统QPS能到多少？瓶颈在哪里？"
 - "你的Supervisor编排和简单的if-else路由有什么区别？"
 - "RAG检索的准确率怎么评估？"
-- "Go版本和Python版本有什么性能差异？"
+- "Node.js、Go和Python版本有什么性能差异？"
 
-## 五、三语言实现对比
+## 五、四语言实现对比
 
-| 维度 | Python (LangGraph) | Java (Spring AI) | Go (原生+Gin) |
-|------|-------------------|-----------------|--------------|
-| 编排模型 | LangGraph StateGraph | Agent接口+组合模式 | goroutine+struct |
-| 状态管理 | TypedDict + Checkpoint | POJO类 | 结构体指针 |
-| 并发能力 | asyncio协程 | CompletableFuture | goroutine真并行 |
-| 适合团队 | AI/数据团队 | 企业级Java团队 | Go微服务团队 |
-| 单机QPS | 50-100（LLM瓶颈） | 200-500 | 500-2000 |
-| 内存占用 | ~200MB | ~300MB | ~30MB |
+| 维度 | Python (LangGraph) | Java (Spring AI) | Go (原生+Gin) | Node.js (原生ESM) |
+|------|-------------------|-----------------|--------------|-------------------|
+| 编排模型 | LangGraph StateGraph | Agent接口+组合模式 | goroutine+struct | async/await + 显式State |
+| 状态管理 | TypedDict + Checkpoint | POJO类 | 结构体指针 | Object + Map |
+| 并发能力 | asyncio协程 | CompletableFuture | goroutine真并行 | Event Loop + Promise |
+| API层 | FastAPI | Spring MVC | Gin | node:http + SSE |
+| 适合团队 | AI/数据团队 | 企业级Java团队 | Go微服务团队 | Node.js全栈/BFF团队 |
+| 单机QPS | 50-100（LLM瓶颈） | 200-500 | 500-2000 | 200-800（I/O型负载） |
+| 典型空载内存 | ~200MB | ~300MB | ~30MB | ~40-80MB |
+
+> QPS与内存数据是架构选型阶段的量级估算，正式简历或面试陈述应替换为目标部署环境中的实测数据。Node.js 版本当前以零依赖、易运行和标准协议演示为目标；生产环境可接入 LangGraph.js、Redis、向量数据库与 OpenTelemetry SDK。
 
 ## 六、安全注意事项
 

@@ -179,23 +179,26 @@ CrewAI的优势是上手更简单（Agent/Task/Crew三层抽象很直观），�
 
 ---
 
-## Q8: "Go版本和Python版本有什么性能差异？"
+## Q8: "Node.js、Go和Python版本有什么性能差异？"
 
 ### 标准回答
 
 在不调用LLM API的纯系统开销测试中：
 
-| 指标 | Python (LangGraph) | Go (Eino) |
-|------|-------------------|-----------|
-| 单请求延迟（不含LLM） | ~15ms | ~2ms |
-| 内存占用（空载） | ~200MB | ~30MB |
-| 并发处理 | asyncio事件循环 | goroutine真并行 |
-| Agent调度开销 | ~5ms | ~0.5ms |
+| 指标 | Python (LangGraph) | Go (Eino) | Node.js (原生编排) |
+|------|-------------------|-----------|----------------------|
+| 单请求延迟（不含LLM） | ~15ms | ~2ms | ~2-5ms |
+| 内存占用（空载） | ~200MB | ~30MB | ~40-80MB |
+| 并发处理 | asyncio事件循环 | goroutine并发 | Event Loop + Promise |
+| Agent调度开销 | ~5ms | ~0.5ms | ~1ms |
 
 但实际场景中，**LLM API调用是绝对瓶颈**（1-3秒），系统本身的开销在整体延迟中占比<5%。
 
 选Go的场景：高并发（QPS>1000）、内存敏感（容器资源限制）、与Go微服务生态融合。
 选Python的场景：AI生态丰富（LangChain/LangGraph）、开发效率高、团队Python技术栈。
+选Node.js的场景：团队以TypeScript/JavaScript为主、需要与Web/BFF共用模型、强调SSE流式输出和MCP工具集成。CPU密集的本地推理或文本计算应放入Worker Thread，或拆到独立服务，避免阻塞事件循环。
+
+> 表中数字是同量级环境下的参考估算，不应当成项目实测结果。面试时应说明机器规格、并发数、Mock LLM方式和P95/P99数据来源。
 
 ---
 

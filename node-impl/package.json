@@ -1,0 +1,15 @@
+{
+  "name": "smart-cs-multi-agent-node",
+  "version": "1.0.0",
+  "private": true,
+  "description": "智能客服多 Agent 系统的 Node.js 实现",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node src/main.js",
+    "dev": "node --watch src/main.js",
+    "test": "node --test"
+  }
+}

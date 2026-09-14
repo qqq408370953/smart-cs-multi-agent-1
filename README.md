@@ -1,10 +1,11 @@
 # 🤖 智能客服多Agent系统
 
-> **企业级面试项目全攻略** — 面向金融/电商场景，包含 Python / Java / Go 三语言完整实现 + 配套面试材料，从零到面试一站搞定。
+> **企业级面试项目全攻略** — 面向金融/电商场景，包含 Python / Java / Go / Node.js 四语言完整实现 + 配套面试材料，从零到面试一站搞定。
 
 [![Python](https://img.shields.io/badge/Python-3.11+-blue?logo=python)](https://www.python.org/)
 [![Java](https://img.shields.io/badge/Java-17+-orange?logo=openjdk)](https://openjdk.org/)
 [![Go](https://img.shields.io/badge/Go-1.22+-00ADD8?logo=go)](https://golang.org/)
+[![Node.js](https://img.shields.io/badge/Node.js-20+-339933?logo=nodedotjs)](https://nodejs.org/)
 [![LangGraph](https://img.shields.io/badge/LangGraph-0.2+-green)](https://github.com/langchain-ai/langgraph)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
@@ -200,18 +201,18 @@
 
 ---
 
-## 🔀 三语言实现对比
+## 🔀 四语言实现对比
 
-| 维度 | Python (LangGraph) | Java (Spring AI) | Go (Eino) |
-|------|-------------------|------------------|-----------|
-| **目录** | [`python-impl/`](./python-impl/) | [`java-impl/`](./java-impl/) | [`go-impl/`](./go-impl/) |
-| **编排框架** | LangGraph StateGraph | Spring AI Agent | Eino Graph/Workflow |
-| **状态管理** | TypedDict + Checkpoint | POJO | struct |
-| **并行方式** | asyncio | CompletableFuture | goroutine |
-| **生态** | LangSmith / LangServe | Spring 全家桶 | CloudWeGo |
-| **适合场景** | AI原型、数据科学团队 | 企业级金融/银行 | 高并发云原生微服务 |
-| **生产成熟度** | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐ | ⭐⭐⭐ |
-| **面试亮点** | 最主流AI开发栈 | 大厂Java面试必考 | 字节/腾讯Go岗位 |
+| 维度 | Python (LangGraph) | Java (Spring AI) | Go (Eino) | Node.js |
+|------|-------------------|------------------|-----------|---------|
+| **目录** | [`python-impl/`](./python-impl/) | [`java-impl/`](./java-impl/) | [`go-impl/`](./go-impl/) | [`node-impl/`](./node-impl/) |
+| **编排框架** | LangGraph StateGraph | Spring AI Agent | Eino Graph/Workflow | 原生异步编排 |
+| **状态管理** | TypedDict + Checkpoint | POJO | struct | Object + Map |
+| **并行方式** | asyncio | CompletableFuture | goroutine | Promise / Event Loop |
+| **生态** | LangSmith / LangServe | Spring 全家桶 | CloudWeGo | npm / Web 全栈 |
+| **适合场景** | AI原型、数据科学团队 | 企业级金融/银行 | 高并发云原生微服务 | Web全栈、BFF、快速集成 |
+| **生产成熟度** | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐ | ⭐⭐⭐ | ⭐⭐⭐⭐ |
+| **面试亮点** | 最主流AI开发栈 | 大厂Java面试必考 | 字节/腾讯Go岗位 | 事件循环、流式接口、MCP |
 
 ---
 
@@ -295,6 +296,18 @@ go build -o smart-cs-agent .
 ./smart-cs-agent
 ```
 
+### 方式五：Node.js 版本
+
+```bash
+cd node-impl
+
+# 需要 Node.js 20+，无第三方运行时依赖
+npm start
+
+# 测试
+npm test
+```
+
 ---
 
 ## 📁 项目结构
@@ -335,14 +348,20 @@ smart-cs-multi-agent/
 │   ├── 📄 Dockerfile
 │   └── 📂 src/main/java/com/smartcs/
 │
-└── 📂 go-impl/                     ← Go实现 (Eino框架)
-    ├── 📄 go.mod                   ← Go依赖管理
-    ├── 📄 main.go                  ← 程序入口
+├── 📂 go-impl/                     ← Go实现 (Eino框架)
+│   ├── 📄 go.mod                   ← Go依赖管理
+│   ├── 📄 main.go                  ← 程序入口
+│   ├── 📄 Dockerfile
+│   ├── 📂 agent/                   ← Agent实现
+│   ├── 📂 memory/                  ← 记忆系统
+│   ├── 📂 mcp/                     ← MCP协议
+│   └── 📂 tracing/                 ← 链路追踪
+│
+└── 📂 node-impl/                   ← Node.js实现 (原生ESM)
+    ├── 📄 package.json
     ├── 📄 Dockerfile
-    ├── 📂 agent/                   ← Agent实现
-    ├── 📂 memory/                  ← 记忆系统
-    ├── 📂 mcp/                     ← MCP协议
-    └── 📂 tracing/                 ← 链路追踪
+    ├── 📂 src/                     ← Agent、记忆、MCP、API实现
+    └── 📂 test/                    ← Node内置测试
 ```
 
 ---

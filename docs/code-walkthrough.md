@@ -1,6 +1,6 @@
 # 代码讲解文档 — 核心模块逐行解析
 
-> 本文档对三语言实现的核心模块进行详细讲解，帮助你在面试中清晰地描述代码设计。
+> 本文档对 Python、Java、Go、Node.js 四语言实现的核心模块进行详细讲解，帮助你在面试中清晰地描述代码设计。
 
 ---
 
@@ -262,7 +262,96 @@ Go 1.18+的泛型让追踪函数可以适用于任何返回类型，类似Python
 
 ---
 
-## 4. 设计模式总结
+## 4. Node.js实现核心讲解
+
+### 4.1 应用装配与依赖注入 (`src/app.js`)
+
+```javascript
+export function createApplication(options = {}) {
+  const workingMemory = new WorkingMemory();
+  const shortTermMemory = new ShortTermMemory({
+    maxTurns: options.maxTurns ?? 20,
+    ttlSeconds: options.ttlSeconds ?? 1800,
+  });
+  const longTermMemory = new LongTermMemory();
+
+  const supervisor = new SupervisorAgent({
+    intentRouter: new IntentRouterAgent(),
+    knowledgeAgent: new KnowledgeRAGAgent(longTermMemory),
+    ticketAgent,
+    complianceAgent,
+    workingMemory,
+  });
+}
+```
+
+Node.js 版本不依赖全局单例，`createApplication()` 统一创建并注入 Agent、记忆系统和 MCP Server。测试可以为每个用例创建隔离实例，生产环境也能在这里把内存实现替换为 Redis 或向量数据库适配器。
+
+### 4.2 Supervisor异步编排 (`src/agents/supervisor.js`)
+
+```javascript
+async orchestrate(state) {
+  return trace("supervisor", "orchestrate", async () => {
+    await this.intentRouter.process(state);
+
+    if (state.intent === "ticket_handler") {
+      await this.ticketAgent.process(state);
+    } else if (state.intent === "compliance_checker") {
+      state.sub_results.security_guidance = "...";
+    } else {
+      await this.knowledgeAgent.process(state);
+    }
+
+    await this.complianceAgent.process(state);
+    state.final_response = this.synthesize(state);
+    return state;
+  });
+}
+```
+
+**Node.js特有设计**：
+- 使用 `async/await` 表达工作流，每个 Agent 保持统一的 `process(state)` 契约
+- State 是一次请求独享的普通对象，Agent 通过 `sub_results` 写入独立结果
+- 合规检查位于统一汇聚点，无论哪个业务分支都不能绕过
+- I/O 型 Agent 可通过 `Promise.all()` 并发，适合 LLM、Redis、HTTP 工具调用等场景
+
+### 4.3 原生HTTP与SSE (`src/api/server.js`)
+
+```javascript
+if (url.pathname.endsWith("/stream")) {
+  response.writeHead(200, {
+    "content-type": "text/event-stream; charset=utf-8",
+    "cache-control": "no-cache",
+  });
+  response.write(`event: result\ndata: ${JSON.stringify(payload)}\n\n`);
+  response.end();
+}
+```
+
+API 层基于 `node:http`，提供 REST、SSE 和 CORS，无需安装 Express。请求体限制为 1 MiB，非法 JSON、缺失消息和未知路由都有明确状态码。`POST /api/chat/stream` 使用标准 SSE 格式，后续接入流式 LLM 时可逐 token 写入同一响应。
+
+### 4.4 MCP JSON-RPC (`src/mcp/server.js`)
+
+```javascript
+if (request.method === "tools/call") {
+  const result = await this.callTool(
+    request.params?.name ?? "",
+    request.params?.arguments ?? {},
+  );
+  return { jsonrpc: "2.0", result, id };
+}
+```
+
+MCP Server 支持工具注册、`tools/list`、`tools/call`、`ping`、必填参数校验和最近100条调用日志。既可通过 `/api/tools/call` 使用普通 REST，也可通过 `/mcp` 使用 JSON-RPC 2.0。
+
+### 4.5 分层记忆与可测试性
+
+- `WorkingMemory`：使用私有 `Map` 保存会话上下文和最近50条状态变更
+- `ShortTermMemory`：使用滑动窗口保存最近N条消息，并在访问时执行TTL过期清理
+- `LongTermMemory`：对中文生成二元词组、对英文提取单词，实现零依赖关键词排序
+- `node:test`：直接启动随机端口，验证聊天、历史、RAG、MCP和PII审查的完整链路
+
+## 5. 设计模式总结
 
 | 模式 | 应用位置 | 说明 |
 |------|---------|------|

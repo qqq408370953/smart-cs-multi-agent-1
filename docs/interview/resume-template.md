@@ -71,6 +71,30 @@
 
 ---
 
+## 版本四：Node.js后端/全栈工程师 方向
+
+### 智能客服多Agent系统 | Node.js后端工程师 | 2025.09 - 2026.03
+
+**项目背景**：面向金融/电商客服场景，使用 Node.js 构建可嵌入 Web/BFF 技术栈的多Agent服务，统一提供聊天、会话历史、工具调用和流式响应接口。
+
+**核心职责**：
+- 基于 **原生ESM + async/await** 实现Supervisor编排，统一调度意图路由、RAG、工单和合规审查Agent
+- 基于 **node:http** 实现REST与SSE接口，加入1 MiB请求体限制、JSON错误处理、CORS与优雅退出
+- 实现 **MCP JSON-RPC 2.0** 工具服务，支持工具注册、发现、参数校验、调用日志和统一错误响应
+- 使用 **Map + TTL滑动窗口** 实现可替换的工作记忆与短期记忆，并针对中文查询实现二元词组关键词检索
+- 使用 **node:test** 编写端到端测试，覆盖路由、知识检索、会话历史、MCP调用和PII脱敏
+
+**技术栈**：Node.js 20+ / ESM / async-await / SSE / MCP JSON-RPC / Docker
+
+**项目成果写法示例**：
+- 在无第三方运行时依赖的前提下完成可直接启动的Agent服务，降低演示和部署环境准备成本
+- 统一REST、SSE和MCP三类协议入口，为Web前端、Agent客户端和内部工具提供相同业务能力
+- 核心接口与规则链路由自动化测试覆盖，所有Agent调用均记录耗时、错误率和调用次数
+
+> 上述成果避免使用未经验证的QPS或业务提升数字。投递简历前应在目标机器上压测，并用自己的真实数据替换描述。
+
+---
+
 ## 简历写作要点总结
 
 ### 动词选择（强动词优先）
@@ -88,6 +112,7 @@
 - AI岗：LangGraph / RAG / OpenTelemetry 放前面
 - Java岗：Spring Boot / Spring AI / Redis 放前面
 - Go岗：Go / Eino / Gin / goroutine 放前面
+- Node.js岗：Node.js / async-await / SSE / MCP / Redis 放前面
 
 ### 避免的写法
 - "负责xxx模块的开发" → 太笼统

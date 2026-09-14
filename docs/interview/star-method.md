@@ -54,7 +54,7 @@
 ## 场景三："为什么选择这个技术栈？有没有考虑过替代方案？"
 
 ### S
-> 技术选型时我们面临多个选择：Python有LangGraph和CrewAI，Java有Spring AI，Go有Eino框架。同时在向量数据库上也需要在FAISS、Milvus、Pinecone之间做选择。
+> 技术选型时我们面临多个选择：Python有LangGraph和CrewAI，Java有Spring AI，Go有Eino框架，Node.js可以选择LangGraph.js或原生异步编排。同时在向量数据库上也需要在FAISS、Milvus、Pinecone之间做选择。
 
 ### T
 > 我需要给团队提供一个技术选型方案，要考虑开发效率、生产稳定性、团队技能栈。
@@ -66,8 +66,10 @@
 > - LangGraph：图式编排，状态管理好，checkpoint支持，但Python性能有瓶颈
 > - CrewAI：上手简单，但对复杂编排的控制力不够
 > - Spring AI：Java生态成熟，企业级特性完善，但AI社区生态不如Python
+> - Eino：Go运行时资源占用低、并发模型清晰，但前端团队接入成本较高
+> - Node.js原生编排：与Web/BFF技术栈一致，SSE和MCP接入直接，但CPU密集任务需要Worker Thread或独立服务
 >
-> 我的决策是：**用Python/LangGraph做MVP快速验证，同时提供Java和Go版本给不同团队使用**。
+> 我的决策是：**用Python/LangGraph做MVP快速验证，同时提供Java、Go和Node.js版本给不同团队使用**。Node.js版本先用零依赖的显式State和async/await实现协议与流程，生产升级时再按复杂度决定是否引入LangGraph.js。
 >
 > **向量数据库**：
 > - FAISS：Facebook开源，单机性能最好，毫秒级响应，但需要自己管理

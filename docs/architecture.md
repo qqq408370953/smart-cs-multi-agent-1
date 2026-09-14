@@ -13,7 +13,8 @@
                                        │ HTTP/SSE
                                        ▼
                           ┌─────────────────────────┐
-                          │   API Gateway (FastAPI)   │
+                          │ API Gateway (FastAPI /    │
+                          │ Spring / Gin / Node.js)   │
                           │   认证 | 限流 | 日志       │
                           └────────────┬────────────┘
                                        │
@@ -214,14 +215,16 @@ class AgentState(TypedDict):
 
 ### 编排框架对比
 
-| 维度 | LangGraph (Python) | Spring AI (Java) | Eino (Go) |
-|------|-------------------|------------------|-----------|
-| 编排模型 | 有向图StateGraph | Agent组合模式 | Graph/Workflow |
-| 状态管理 | TypedDict + Checkpoint | POJO | struct |
-| 并行能力 | asyncio | CompletableFuture | goroutine |
-| 生态 | LangSmith/LangServe | Spring生态 | CloudWeGo |
-| 适合团队 | AI/数据团队 | 企业级Java团队 | Go微服务团队 |
-| 生产成熟度 | 高 | 中高 | 中 |
+| 维度 | LangGraph (Python) | Spring AI (Java) | Eino (Go) | Node.js 原生编排 |
+|------|-------------------|------------------|-----------|------------------|
+| 编排模型 | 有向图StateGraph | Agent组合模式 | Graph/Workflow | Promise工作流 + 显式State |
+| 状态管理 | TypedDict + Checkpoint | POJO | struct | Object + Map |
+| 并行能力 | asyncio | CompletableFuture | goroutine | Event Loop + Promise |
+| 生态 | LangSmith/LangServe | Spring生态 | CloudWeGo | npm / Web全栈生态 |
+| 适合团队 | AI/数据团队 | 企业级Java团队 | Go微服务团队 | Node.js全栈/BFF团队 |
+| 生产成熟度 | 高 | 中高 | 中 | 中高 |
+
+Node.js 版本采用零第三方运行时依赖的原生 ESM 实现，显式执行“意图路由 → 业务 Agent → 合规审查 → 汇总”流程。当前短期记忆和长期记忆分别使用带 TTL 的进程内 `Map` 与关键词检索，接口边界保持稳定，生产部署时可替换为 Redis、向量数据库和 LLM，而不影响 Supervisor 与 API 层。
 
 ### 向量数据库对比
 
