@@ -503,6 +503,7 @@ Node.js 版还提供 `node:http` REST API、SSE响应、MCP JSON-RPC 2.0、Redis
 | **架构设计文档** | 完整流程图、时序图、技术选型对比分析 | [查看](./docs/architecture.md) |
 | **代码讲解文档** | 核心模块逐行解析，设计模式说明 | [查看](./docs/code-walkthrough.md) |
 | **部署指南** | Docker一键部署、生产环境配置、监控告警 | [查看](./docs/deployment.md) |
+| **Node学习路线** | 请求流程图、源码阅读顺序和十二步实践课程 | [查看](./docs/node-learning-roadmap.md) |
 
 ### 常见面试问题预览
 

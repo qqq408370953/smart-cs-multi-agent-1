@@ -19,6 +19,8 @@ Node.js 版本面向 Web 全栈、BFF 和 JavaScript/TypeScript 团队：
 
 `OPENAI_API_KEY`是可选配置：配置后启用完整LLM链路；未配置或模型调用失败时，Agent会降级到确定性规则和本地知识检索。`REDIS_URL`和`OTEL_EXPORTER_OTLP_ENDPOINT`同样按需启用，因此缺少外部服务时仍可运行。
 
+如果你准备从源码系统学习，请按[Node.js Agent项目学习路线](../docs/node-learning-roadmap.md)中的流程图和十二步课程进行。
+
 ## 请求链路
 
 ```text
