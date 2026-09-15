@@ -1,0 +1,14 @@
+{
+  "name": "smart-cs-agent-flow-demo",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "智能客服Agent执行流程可视化学习客户端",
+  "scripts": {
+    "start": "node server.js",
+    "check": "node --check server.js && node --check dist/app.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

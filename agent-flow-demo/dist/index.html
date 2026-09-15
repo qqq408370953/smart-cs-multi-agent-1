@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="逐步观察智能客服Agent从请求到响应的完整执行流程" />
+    <title>Agent Flow Lab · 智能客服流程实验室</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <a class="brand" href="#workspace" aria-label="返回流程实验室">
+          <span class="brand-mark">AF</span>
+          <span>
+            <strong>Agent Flow Lab</strong>
+            <small>智能客服执行流程实验室</small>
+          </span>
+        </a>
+
+        <div class="connection-bar">
+          <label for="apiBase">Agent API</label>
+          <input id="apiBase" value="http://localhost:8100" spellcheck="false" />
+          <button class="button button-secondary" id="checkButton" type="button">连接检测</button>
+          <span class="connection-state" id="connectionState" data-status="idle">
+            <i aria-hidden="true"></i><span>未检测</span>
+          </span>
+        </div>
+      </header>
+
+      <main id="workspace">
+        <section class="control-strip" aria-labelledby="labTitle">
+          <div>
+            <p class="eyebrow">INTERACTIVE TRACE / 01</p>
+            <h1 id="labTitle">把一次Agent请求拆开来看</h1>
+            <p>选择场景，单步执行。每一步都会同步更新流程节点、共享State和真实接口数据。</p>
+          </div>
+
+          <div class="run-controls">
+            <button class="button button-ghost" id="resetButton" type="button">重置</button>
+            <button class="button button-secondary" id="nextButton" type="button">执行下一步</button>
+            <button class="button button-primary" id="autoButton" type="button">自动演示全部</button>
+          </div>
+        </section>
+
+        <section class="scenario-section" aria-label="演示场景">
+          <div class="section-label">选择输入场景</div>
+          <div class="scenario-list" id="scenarioList"></div>
+          <label class="custom-message">
+            <span>或者修改消息</span>
+            <input id="messageInput" value="理财产品的投资期限是多久？" />
+          </label>
+        </section>
+
+        <section class="workspace-grid">
+          <aside class="steps-panel panel" aria-labelledby="stepsTitle">
+            <div class="panel-heading">
+              <div>
+                <span class="section-label">执行清单</span>
+                <h2 id="stepsTitle">8个观察步骤</h2>
+              </div>
+              <span class="progress-count" id="progressCount">0 / 8</span>
+            </div>
+            <div class="progress-track"><i id="progressBar"></i></div>
+            <ol class="step-list" id="stepList"></ol>
+          </aside>
+
+          <section class="flow-panel panel" aria-labelledby="flowTitle">
+            <div class="panel-heading">
+              <div>
+                <span class="section-label">LangGraph.js</span>
+                <h2 id="flowTitle">请求执行图</h2>
+              </div>
+              <span class="run-id" id="runId">等待开始</span>
+            </div>
+
+            <div class="flow-canvas" id="flowCanvas" aria-label="Agent执行流程图">
+              <article class="flow-node" data-node="api">
+                <span class="node-index">01</span><strong>HTTP API</strong><small>接收请求</small>
+              </article>
+              <span class="flow-arrow" aria-hidden="true">↓</span>
+              <article class="flow-node" data-node="state">
+                <span class="node-index">02</span><strong>Agent State</strong><small>创建共享状态</small>
+              </article>
+              <span class="flow-arrow" aria-hidden="true">↓</span>
+              <article class="flow-node" data-node="intent">
+                <span class="node-index">03</span><strong>Intent Router</strong><small>识别业务分支</small>
+              </article>
+              <span class="flow-arrow" aria-hidden="true">↓</span>
+              <div class="branch-row">
+                <article class="flow-node branch" data-node="knowledge"><strong>Knowledge RAG</strong><small>咨询 / 政策</small></article>
+                <article class="flow-node branch" data-node="ticket"><strong>Ticket Agent</strong><small>退款 / 投诉</small></article>
+                <article class="flow-node branch" data-node="security"><strong>Security</strong><small>欺诈 / 盗刷</small></article>
+              </div>
+              <span class="flow-arrow" aria-hidden="true">↓</span>
+              <article class="flow-node compliance" data-node="compliance">
+                <span class="node-index">05</span><strong>Compliance Gate</strong><small>规则 + LLM二阶段审查</small>
+              </article>
+              <span class="flow-arrow" aria-hidden="true">↓</span>
+              <article class="flow-node" data-node="response">
+                <span class="node-index">06</span><strong>Supervisor</strong><small>合成最终回答</small>
+              </article>
+              <span class="flow-arrow" aria-hidden="true">↓</span>
+              <div class="branch-row final-row">
+                <article class="flow-node branch" data-node="memory"><strong>Memory</strong><small>历史 + Checkpoint</small></article>
+                <article class="flow-node branch" data-node="observe"><strong>Tracing / MCP</strong><small>指标 + 工具</small></article>
+              </div>
+            </div>
+
+            <div class="lesson-card" id="lessonCard">
+              <span class="lesson-number">准备</span>
+              <div>
+                <strong>先选择一个场景</strong>
+                <p>点击“执行下一步”观察状态如何沿着图流动。</p>
+              </div>
+            </div>
+          </section>
+
+          <aside class="inspector-panel panel" aria-labelledby="inspectorTitle">
+            <div class="panel-heading inspector-heading">
+              <div>
+                <span class="section-label">运行时观察器</span>
+                <h2 id="inspectorTitle">State / Result</h2>
+              </div>
+              <button class="icon-button" id="copyButton" type="button" title="复制当前内容">复制</button>
+            </div>
+            <div class="tab-list" role="tablist" aria-label="观察器视图">
+              <button role="tab" aria-selected="true" data-tab="state">State</button>
+              <button role="tab" aria-selected="false" data-tab="result">Result</button>
+              <button role="tab" aria-selected="false" data-tab="events">Events</button>
+            </div>
+            <pre class="inspector-content" id="inspectorContent" tabindex="0">{
+  "status": "等待执行"
+}</pre>
+          </aside>
+        </section>
+
+        <section class="concept-grid" aria-label="核心概念说明">
+          <article><span>STATE</span><strong>同一次请求的数据总线</strong><p>节点通过统一Schema读取输入、追加结果，不直接互相依赖。</p></article>
+          <article><span>GRAPH</span><strong>流程本身就是代码</strong><p>条件边选择业务Agent，固定边保证所有结果都经过合规。</p></article>
+          <article><span>FALLBACK</span><strong>外部服务不是启动条件</strong><p>没有Key、Redis或Collector时，规则、Map和本地指标继续工作。</p></article>
+          <article><span>OBSERVE</span><strong>用证据理解Agent</strong><p>历史、指标、工具列表和响应共同证明每一步发生了什么。</p></article>
+        </section>
+      </main>
+    </div>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

@@ -376,11 +376,16 @@ smart-cs-multi-agent/
 │   ├── 📂 mcp/                     ← MCP协议
 │   └── 📂 tracing/                 ← 链路追踪
 │
-└── 📂 node-impl/                   ← Node.js实现 (LangGraph.js + 原生ESM)
-    ├── 📄 package.json
-    ├── 📄 Dockerfile
-    ├── 📂 src/                     ← Agent、记忆、MCP、API实现
-    └── 📂 test/                    ← Node内置测试
+├── 📂 node-impl/                   ← Node.js实现 (LangGraph.js + 原生ESM)
+│   ├── 📄 package.json
+│   ├── 📄 Dockerfile
+│   ├── 📂 src/                     ← Agent、记忆、MCP、API实现
+│   └── 📂 test/                    ← Node内置测试
+
+└── 📂 agent-flow-demo/             ← Agent流程可视化学习客户端
+    ├── 📂 dist/                    ← HTML、CSS与交互脚本
+    ├── 📄 server.js                ← 零依赖静态服务
+    └── 📄 README.md                ← 演示与学习说明
 ```
 
 ---
