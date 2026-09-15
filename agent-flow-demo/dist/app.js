@@ -1,3 +1,5 @@
+import { getLesson, learningPhases } from "./lessons.js";
+
 const scenarios = [
   { id: "knowledge", label: "产品咨询", message: "理财产品的投资期限是多久？" },
   { id: "ticket", label: "退款工单", message: "我购买后想申请退款，请帮我创建工单" },
@@ -33,6 +35,17 @@ const elements = {
   inspectorContent: document.querySelector("#inspectorContent"),
   copyButton: document.querySelector("#copyButton"),
   toast: document.querySelector("#toast"),
+  planButton: document.querySelector("#planButton"),
+  lessonDialog: document.querySelector("#lessonDialog"),
+  lessonPhase: document.querySelector("#lessonPhase"),
+  lessonDialogTitle: document.querySelector("#lessonDialogTitle"),
+  dialogProgress: document.querySelector("#dialogProgress"),
+  lessonNav: document.querySelector("#lessonNav"),
+  lessonContent: document.querySelector("#lessonContent"),
+  lessonCloseButton: document.querySelector("#lessonCloseButton"),
+  lessonPrevButton: document.querySelector("#lessonPrevButton"),
+  lessonNextButton: document.querySelector("#lessonNextButton"),
+  lessonExecuteButton: document.querySelector("#lessonExecuteButton"),
 };
 
 let selectedScenario = scenarios[0];
@@ -44,6 +57,7 @@ let result = {};
 let events = [];
 let sessionId = createSessionId();
 let runGeneration = 0;
+let lessonIndex = 0;
 
 function createSessionId() {
   return `flow-demo-${Date.now().toString(36)}`;
@@ -63,6 +77,15 @@ function showToast(message) {
   elements.toast.dataset.visible = "true";
   window.clearTimeout(showToast.timer);
   showToast.timer = window.setTimeout(() => { elements.toast.dataset.visible = "false"; }, 2200);
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
 }
 
 async function request(path, options) {
@@ -97,10 +120,13 @@ function renderSteps() {
   elements.stepList.innerHTML = steps.map((step, index) => {
     const status = index < currentStep ? "done" : index === currentStep ? "active" : "idle";
     return `
-      <li><button class="step-button" type="button" data-step="${index}" data-status="${status}">
-        <span class="step-dot">${index < currentStep ? "✓" : String(index + 1).padStart(2, "0")}</span>
-        <span><strong>${step.title}</strong><small>${step.subtitle}</small></span>
-      </button></li>
+      <li class="step-item">
+        <button class="step-button" type="button" data-step="${index}" data-status="${status}">
+          <span class="step-dot">${index < currentStep ? "✓" : String(index + 1).padStart(2, "0")}</span>
+          <span><strong>${step.title}</strong><small>${step.subtitle}</small></span>
+        </button>
+        <button class="step-learn-button" type="button" data-learn-step="${index}" aria-label="查看第${index + 1}步讲解">讲解</button>
+      </li>
     `;
   }).join("");
   elements.progressCount.textContent = `${Math.min(currentStep, steps.length)} / ${steps.length}`;
@@ -130,11 +156,76 @@ function renderInspector() {
 
 function renderLesson() {
   if (currentStep >= steps.length) {
-    elements.lessonCard.innerHTML = `<span class="lesson-number">完成</span><div><strong>一次完整Agent链路已拆解完毕</strong><p>重置后换一个场景，对比不同条件边和合规结果。</p></div>`;
+    elements.lessonCard.innerHTML = `<span class="lesson-number">完成</span><div><strong>一次完整Agent链路已拆解完毕</strong><p>重置后换一个场景，对比不同条件边和合规结果。</p></div><button class="lesson-open-button" type="button" data-open-current-lesson>复习本课</button>`;
     return;
   }
   const step = steps[currentStep];
-  elements.lessonCard.innerHTML = `<span class="lesson-number">${String(currentStep + 1).padStart(2, "0")}</span><div><strong>${step.title}</strong><p>${step.lesson}</p></div>`;
+  elements.lessonCard.innerHTML = `<span class="lesson-number">${String(currentStep + 1).padStart(2, "0")}</span><div><strong>${step.title}</strong><p>${step.lesson}</p></div><button class="lesson-open-button" type="button" data-open-current-lesson>查看详细讲解</button>`;
+}
+
+function lessonStatus(index) {
+  if (index < currentStep) return { label: "已完成", className: "status-complete" };
+  if (index === currentStep) return { label: "当前步骤", className: "status-current" };
+  return { label: "未开始", className: "" };
+}
+
+function observationFor(index) {
+  const observations = [
+    result.health,
+    Object.keys(state).length ? state : null,
+    state.intent ? { predicted_intent: state.intent, selected_branch: activeBusinessNode() } : null,
+    result.chat,
+    result.chat ? { compliance_passed: result.chat.compliance_passed, compliance_state: state.sub_results?.compliance } : null,
+    state.final_response ? { final_response: state.final_response, messages: state.messages } : null,
+    result.history,
+    result.metrics || result.tools ? { metrics: result.metrics, tools: result.tools } : null,
+  ];
+  return observations[index] || { status: "执行到这一步后，这里会显示真实运行结果" };
+}
+
+function renderLessonNav() {
+  elements.lessonNav.innerHTML = learningPhases.map((phase) => {
+    const lessonButtons = steps.map((step, index) => ({ step, index, lesson: getLesson(index, result.chat?.intent || state.intent) }))
+      .filter(({ lesson }) => lesson.phase === phase.id)
+      .map(({ step, index }) => `<button class="lesson-nav-button" type="button" data-lesson-index="${index}" aria-current="${index === lessonIndex ? "step" : "false"}" data-done="${index < currentStep}"><span class="nav-index">${index < currentStep ? "✓" : index + 1}</span><strong>${escapeHtml(step.title)}</strong></button>`)
+      .join("");
+    return `<section class="phase-block"><div class="phase-heading"><span>${phase.label}</span><span>${phase.steps}</span></div>${lessonButtons}</section>`;
+  }).join("");
+}
+
+function renderLessonDialog() {
+  const intent = result.chat?.intent || state.intent || "knowledge_rag";
+  const lesson = getLesson(lessonIndex, intent);
+  const phase = learningPhases.find((item) => item.id === lesson.phase);
+  const status = lessonStatus(lessonIndex);
+  elements.lessonPhase.textContent = `${phase.label} · 第${lessonIndex + 1}课 / 共8课`;
+  elements.lessonDialogTitle.textContent = lesson.title;
+  elements.dialogProgress.style.setProperty("--lesson-progress", `${(lessonIndex + 1) / steps.length * 100}%`);
+  renderLessonNav();
+
+  const sources = lesson.sources.map((item) => `<article class="source-card"><header class="source-header"><div><strong>${escapeHtml(item.title)}</strong><small>${escapeHtml(item.file)} · 行 ${escapeHtml(item.lines)}</small></div><a href="${item.url}" target="_blank" rel="noreferrer">在GitHub定位 ↗</a></header><pre><code>${escapeHtml(item.code)}</code></pre></article>`).join("");
+  const branch = lesson.branch ? `<div class="branch-note"><strong>${escapeHtml(lesson.branch.title)}</strong><p>${escapeHtml(lesson.branch.description)}</p></div>` : "";
+  elements.lessonContent.innerHTML = `
+    <div class="lesson-kicker"><span>${escapeHtml(phase.label)}</span><span>${escapeHtml(lesson.duration)}</span><span class="${status.className}">${status.label}</span></div>
+    <h3>${escapeHtml(lesson.title)}</h3>
+    <p class="lesson-goal">${escapeHtml(lesson.goal)}</p>
+    ${branch}
+    <section class="lesson-section"><h4><span>01</span>这一步真实做了什么</h4><ol>${lesson.does.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ol></section>
+    <section class="lesson-section"><h4><span>02</span>输入与输出</h4><div class="io-grid"><div class="io-card"><span>INPUT</span><p>${escapeHtml(lesson.input)}</p></div><div class="io-card"><span>OUTPUT</span><p>${escapeHtml(lesson.output)}</p></div></div></section>
+    <section class="lesson-section"><h4><span>03</span>必须理解的概念</h4><div class="concept-list">${lesson.concepts.map(([term, description]) => `<div class="concept-item"><strong>${escapeHtml(term)}</strong><p>${escapeHtml(description)}</p></div>`).join("")}</div></section>
+    <section class="lesson-section"><h4><span>04</span>关键代码定位</h4><div class="source-list">${sources}</div></section>
+    <section class="lesson-section"><h4><span>05</span>当前运行观察</h4><div class="observe-card"><span>观察任务</span><p>${escapeHtml(lesson.observe)}</p></div><pre class="live-observation">${escapeHtml(JSON.stringify(observationFor(lessonIndex), null, 2))}</pre></section>
+    <section class="lesson-section"><h4><span>06</span>练习与掌握标准</h4><div class="exercise-grid"><div class="exercise-card"><span>动手练习</span><p>${escapeHtml(lesson.exercise)}</p></div><div class="exercise-card mastery"><span>通过标准</span><p>${escapeHtml(lesson.mastery)}</p></div></div></section>
+  `;
+  elements.lessonPrevButton.disabled = lessonIndex === 0;
+  elements.lessonNextButton.disabled = lessonIndex === steps.length - 1;
+  elements.lessonExecuteButton.textContent = lessonIndex < currentStep ? "查看已完成结果" : `执行到第${lessonIndex + 1}步`;
+}
+
+function openLesson(index) {
+  lessonIndex = Math.max(0, Math.min(steps.length - 1, index));
+  renderLessonDialog();
+  if (!elements.lessonDialog.open) elements.lessonDialog.showModal();
 }
 
 function render() {
@@ -288,6 +379,11 @@ elements.messageInput.addEventListener("input", () => {
 });
 
 elements.stepList.addEventListener("click", (event) => {
+  const lessonButton = event.target.closest("[data-learn-step]");
+  if (lessonButton) {
+    openLesson(Number(lessonButton.dataset.learnStep));
+    return;
+  }
   const button = event.target.closest("[data-step]");
   if (!button || busy) return;
   runUntil(Number(button.dataset.step));
@@ -316,6 +412,37 @@ elements.checkButton.addEventListener("click", async () => {
 elements.nextButton.addEventListener("click", runOne);
 elements.autoButton.addEventListener("click", () => runUntil(steps.length - 1));
 elements.resetButton.addEventListener("click", reset);
+elements.planButton.addEventListener("click", () => openLesson(Math.min(currentStep, steps.length - 1)));
+elements.lessonCard.addEventListener("click", (event) => {
+  if (event.target.closest("[data-open-current-lesson]")) openLesson(Math.min(currentStep, steps.length - 1));
+});
+elements.lessonCloseButton.addEventListener("click", () => elements.lessonDialog.close());
+elements.lessonDialog.addEventListener("click", (event) => {
+  if (event.target === elements.lessonDialog) elements.lessonDialog.close();
+});
+elements.lessonNav.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-lesson-index]");
+  if (!button) return;
+  lessonIndex = Number(button.dataset.lessonIndex);
+  renderLessonDialog();
+});
+elements.lessonPrevButton.addEventListener("click", () => {
+  lessonIndex = Math.max(0, lessonIndex - 1);
+  renderLessonDialog();
+});
+elements.lessonNextButton.addEventListener("click", () => {
+  lessonIndex = Math.min(steps.length - 1, lessonIndex + 1);
+  renderLessonDialog();
+});
+elements.lessonExecuteButton.addEventListener("click", () => {
+  const target = lessonIndex;
+  elements.lessonDialog.close();
+  if (target < currentStep) {
+    showToast("该步骤已经执行，可在观察器中查看结果");
+    return;
+  }
+  runUntil(target);
+});
 elements.copyButton.addEventListener("click", async () => {
   await navigator.clipboard.writeText(elements.inspectorContent.textContent);
   showToast("当前观察器内容已复制");

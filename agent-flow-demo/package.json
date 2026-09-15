@@ -6,7 +6,7 @@
   "description": "智能客服Agent执行流程可视化学习客户端",
   "scripts": {
     "start": "node server.js",
-    "check": "node --check server.js && node --check dist/app.js"
+    "check": "node --check server.js && node --check dist/app.js && node --check dist/lessons.js"
   },
   "engines": {
     "node": ">=20"

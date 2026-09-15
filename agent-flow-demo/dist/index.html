@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="逐步观察智能客服Agent从请求到响应的完整执行流程" />
     <title>Agent Flow Lab · 智能客服流程实验室</title>
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
@@ -37,6 +38,7 @@
           </div>
 
           <div class="run-controls">
+            <button class="button button-plan" id="planButton" type="button">学习计划 / 8课</button>
             <button class="button button-ghost" id="resetButton" type="button">重置</button>
             <button class="button button-secondary" id="nextButton" type="button">执行下一步</button>
             <button class="button button-primary" id="autoButton" type="button">自动演示全部</button>
@@ -143,6 +145,28 @@
         </section>
       </main>
     </div>
+
+    <dialog class="lesson-dialog" id="lessonDialog" aria-labelledby="lessonDialogTitle">
+      <div class="dialog-shell">
+        <header class="dialog-header">
+          <div>
+            <span class="section-label" id="lessonPhase">学习计划</span>
+            <h2 id="lessonDialogTitle">Agent步骤详解</h2>
+          </div>
+          <button class="dialog-close" id="lessonCloseButton" type="button" aria-label="关闭讲解">×</button>
+        </header>
+        <div class="dialog-progress" id="dialogProgress"></div>
+        <div class="dialog-body">
+          <nav class="lesson-nav" id="lessonNav" aria-label="八步学习计划"></nav>
+          <article class="lesson-content" id="lessonContent"></article>
+        </div>
+        <footer class="dialog-footer">
+          <button class="button button-ghost" id="lessonPrevButton" type="button">上一课</button>
+          <button class="button button-secondary" id="lessonExecuteButton" type="button">执行到本步</button>
+          <button class="button button-primary" id="lessonNextButton" type="button">下一课</button>
+        </footer>
+      </div>
+    </dialog>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
     <script type="module" src="./app.js"></script>
