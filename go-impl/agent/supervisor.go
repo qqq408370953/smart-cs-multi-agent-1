@@ -11,7 +11,7 @@ import (
 
 // SupervisorAgent 是中央编排协调者。
 // 负责意图路由 → 子Agent调度 → 合规审查 → 结果汇总。
-// Go的goroutine天然适合并行调度多个子Agent。
+// 当前流程顺序执行，确保业务结果统一经过合规审查；独立I/O分支可再扩展goroutine。
 type SupervisorAgent struct {
 	intentRouter    *IntentRouterAgent
 	knowledgeAgent  *KnowledgeRAGAgent

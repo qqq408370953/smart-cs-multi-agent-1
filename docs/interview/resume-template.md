@@ -53,16 +53,16 @@
 
 ### 智能客服多Agent系统 | 后端开发工程师 | 2025.09 - 2026.03
 
-**项目背景**：基于字节跳动Eino框架构建的高并发多Agent智能客服系统，利用Go的goroutine并发模型实现Agent并行调度。
+**项目背景**：使用Go与Gin构建轻量多Agent智能客服系统，以原生Supervisor顺序编排意图、知识、工单和合规Agent。
 
 **核心职责**：
-- 基于 **cloudwego/eino** 框架实现Supervisor编排模式，使用Go Graph/Workflow API编排4个业务Agent
-- 利用Go **goroutine + channel** 实现Agent并行调度，Supervisor可同时触发知识检索和合规审查，延迟降低40%
+- 使用原生Go `struct`与接口实现 **Supervisor编排模式**，固定执行意图路由、业务Agent、合规审查和结果汇总
+- 保持无共享依赖的Agent边界，为后续使用 **goroutine + channel** 并发执行独立I/O任务预留扩展点
 - 设计 **sync.RWMutex** 保护的分层记忆系统，工作记忆(进程内) + Redis短期记忆 + 向量库长期记忆
 - 实现高并发工单存储，使用 **ConcurrentMap + 原子操作** 保证工单状态的线程安全流转
 - 基于 **Gin框架** 提供RESTful API，集成OpenTelemetry分布式追踪
 
-**技术栈**：Go 1.22 / Eino / Gin / Redis / OpenTelemetry / Docker
+**技术栈**：Go 1.22 / Gin / Redis / OpenTelemetry / Docker
 
 **项目成果**：
 - 单实例QPS达2000+，goroutine池化管理避免泄露
@@ -78,16 +78,18 @@
 **项目背景**：面向金融/电商客服场景，使用 Node.js 构建可嵌入 Web/BFF 技术栈的多Agent服务，统一提供聊天、会话历史、工具调用和流式响应接口。
 
 **核心职责**：
-- 基于 **原生ESM + async/await** 实现Supervisor编排，统一调度意图路由、RAG、工单和合规审查Agent
+- 基于 **LangGraph.js StateGraph + MemorySaver** 实现Supervisor条件路由、统一合规汇聚和Checkpoint
+- 使用 **LangChain ChatOpenAI / OpenAI Embeddings + Zod结构化输出** 实现意图分类、向量召回、RAG改写/重排/生成、工单分析和LLM二阶段合规审查
 - 基于 **node:http** 实现REST与SSE接口，加入1 MiB请求体限制、JSON错误处理、CORS与优雅退出
 - 实现 **MCP JSON-RPC 2.0** 工具服务，支持工具注册、发现、参数校验、调用日志和统一错误响应
-- 使用 **Map + TTL滑动窗口** 实现可替换的工作记忆与短期记忆，并针对中文查询实现二元词组关键词检索
+- 使用官方 **redis** 客户端实现List滑动窗口与TTL，连接失败自动回退Map；针对中文查询实现二元词组关键词检索
+- 集成 **OpenTelemetry NodeSDK + OTLP HTTP Exporter**，同时维护Agent调用次数、耗时和错误率指标
 - 使用 **node:test** 编写端到端测试，覆盖路由、知识检索、会话历史、MCP调用和PII脱敏
 
-**技术栈**：Node.js 20+ / ESM / async-await / SSE / MCP JSON-RPC / Docker
+**技术栈**：Node.js 20+ / LangGraph.js / LangChain / Redis / OpenTelemetry / SSE / MCP JSON-RPC / Docker
 
 **项目成果写法示例**：
-- 在无第三方运行时依赖的前提下完成可直接启动的Agent服务，降低演示和部署环境准备成本
+- 通过外部服务可选启用和自动降级设计，使同一套服务既能离线演示，也能连接LLM、Redis与Jaeger
 - 统一REST、SSE和MCP三类协议入口，为Web前端、Agent客户端和内部工具提供相同业务能力
 - 核心接口与规则链路由自动化测试覆盖，所有Agent调用均记录耗时、错误率和调用次数
 
@@ -111,8 +113,8 @@
 ### 技术栈排列（按面试岗位调整顺序）
 - AI岗：LangGraph / RAG / OpenTelemetry 放前面
 - Java岗：Spring Boot / Spring AI / Redis 放前面
-- Go岗：Go / Eino / Gin / goroutine 放前面
-- Node.js岗：Node.js / async-await / SSE / MCP / Redis 放前面
+- Go岗：Go / Gin / Redis / OpenTelemetry 放前面；只有实际接入后才写Eino
+- Node.js岗：Node.js / LangGraph.js / Redis / OpenTelemetry / SSE / MCP 放前面
 
 ### 避免的写法
 - "负责xxx模块的开发" → 太笼统

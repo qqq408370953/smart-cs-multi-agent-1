@@ -8,15 +8,26 @@ import { ShortTermMemory } from "./memory/short-term.js";
 import { LongTermMemory } from "./memory/long-term.js";
 import { MCPToolServer, createDefaultTools } from "./mcp/server.js";
 import { createApiServer } from "./api/server.js";
+import { createChatModel, createEmbeddingsModel } from "./llm/client.js";
+import { initTracing, shutdownTracing } from "./tracing/tracer.js";
 
+/**
+ * 应用组合根：集中创建记忆、Agent、Supervisor、MCP与HTTP Server。
+ * 避免业务模块依赖全局单例，也便于测试为每个应用创建隔离状态。
+ */
 export function createApplication(options = {}) {
+  initTracing(options.tracing);
+  const llm = options.llm !== undefined ? options.llm : createChatModel();
+  const embeddings = options.embeddings !== undefined ? options.embeddings : createEmbeddingsModel();
   const workingMemory = new WorkingMemory();
   const shortTermMemory = new ShortTermMemory({
+    redisUrl: options.redisUrl ?? process.env.REDIS_URL,
     maxTurns: options.maxTurns ?? Number(process.env.SHORT_TERM_MAX_TURNS || 20),
     ttlSeconds: options.ttlSeconds ?? Number(process.env.SHORT_TERM_TTL_SECONDS || 1800),
   });
-  const longTermMemory = new LongTermMemory();
+  const longTermMemory = new LongTermMemory({ embeddings });
 
+  // 与其他语言版本保持一致的演示知识库。
   longTermMemory.addDocumentsBatch([
     {
       content: "我们的理财产品A年化收益率为3.5%-5.2%，投资期限为6个月至3年，最低投资金额10000元。注意：理财非存款，产品有风险，投资须谨慎。",
@@ -32,11 +43,11 @@ export function createApplication(options = {}) {
     },
   ]);
 
-  const ticketAgent = new TicketHandlerAgent();
-  const complianceAgent = new ComplianceCheckerAgent();
+  const ticketAgent = new TicketHandlerAgent(llm);
+  const complianceAgent = new ComplianceCheckerAgent(llm);
   const supervisor = new SupervisorAgent({
-    intentRouter: new IntentRouterAgent(),
-    knowledgeAgent: new KnowledgeRAGAgent(longTermMemory),
+    intentRouter: new IntentRouterAgent(llm),
+    knowledgeAgent: new KnowledgeRAGAgent(longTermMemory, llm),
     ticketAgent,
     complianceAgent,
     workingMemory,
@@ -50,5 +61,10 @@ export function createApplication(options = {}) {
     memories: { workingMemory, shortTermMemory, longTermMemory },
     agents: { ticketAgent, complianceAgent },
     mcpServer,
+    llmEnabled: Boolean(llm),
+    async close() {
+      await shortTermMemory.close();
+      await shutdownTracing();
+    },
   };
 }

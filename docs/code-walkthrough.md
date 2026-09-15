@@ -217,31 +217,20 @@ public class SupervisorAgent {
 
 ## 3. Go实现核心讲解
 
-### 3.1 并发设计
+### 3.1 原生Supervisor与并发扩展
 
 ```go
 func (s *SupervisorAgent) Orchestrate(state *State) *State {
-    // Go的goroutine可以轻松实现Agent并行调度
-    // 如果需要并行执行知识检索和合规审查：
-    
-    var wg sync.WaitGroup
-    wg.Add(2)
-    
-    go func() {
-        defer wg.Done()
-        state = s.knowledgeAgent.Process(state)
-    }()
-    
-    go func() {
-        defer wg.Done()
-        // 并行执行其他操作
-    }()
-    
-    wg.Wait()
+    state = s.intentRouter.Process(state)
+    state = s.dispatch(state)
+    state = s.complianceAgent.Process(state)
+    return s.synthesize(state)
 }
 ```
 
-**Go的并发优势**：
+当前Go版本没有引入Eino，使用`struct`与`switch`实现顺序Supervisor，保证业务结果一定先于合规审查。若未来并行执行彼此独立的检索或工具I/O，应让goroutine返回独立结果后由Supervisor合并，不能让多个goroutine无锁写同一个`State`。
+
+**Go的并发扩展能力**：
 - goroutine创建成本极低（~2KB栈空间），可以为每个Agent请求创建goroutine
 - `sync.RWMutex`实现读写锁，工作记忆支持并发读、互斥写
 - channel可以用于Agent间异步消息传递
@@ -268,16 +257,21 @@ Go 1.18+的泛型让追踪函数可以适用于任何返回类型，类似Python
 
 ```javascript
 export function createApplication(options = {}) {
+  const llm = options.llm !== undefined ? options.llm : createChatModel();
+  const embeddings = options.embeddings !== undefined
+    ? options.embeddings
+    : createEmbeddingsModel();
   const workingMemory = new WorkingMemory();
   const shortTermMemory = new ShortTermMemory({
+    redisUrl: options.redisUrl ?? process.env.REDIS_URL,
     maxTurns: options.maxTurns ?? 20,
     ttlSeconds: options.ttlSeconds ?? 1800,
   });
-  const longTermMemory = new LongTermMemory();
+  const longTermMemory = new LongTermMemory({ embeddings });
 
   const supervisor = new SupervisorAgent({
-    intentRouter: new IntentRouterAgent(),
-    knowledgeAgent: new KnowledgeRAGAgent(longTermMemory),
+    intentRouter: new IntentRouterAgent(llm),
+    knowledgeAgent: new KnowledgeRAGAgent(longTermMemory, llm),
     ticketAgent,
     complianceAgent,
     workingMemory,
@@ -285,33 +279,29 @@ export function createApplication(options = {}) {
 }
 ```
 
-Node.js 版本不依赖全局单例，`createApplication()` 统一创建并注入 Agent、记忆系统和 MCP Server。测试可以为每个用例创建隔离实例，生产环境也能在这里把内存实现替换为 Redis 或向量数据库适配器。
+Node.js 版本不依赖全局单例，`createApplication()` 统一创建并注入 ChatOpenAI、Agent、记忆系统和 MCP Server。测试可以传入Mock LLM或创建隔离实例，生产环境也能在这里替换向量数据库适配器。
 
 ### 4.2 Supervisor异步编排 (`src/agents/supervisor.js`)
 
 ```javascript
-async orchestrate(state) {
-  return trace("supervisor", "orchestrate", async () => {
-    await this.intentRouter.process(state);
-
-    if (state.intent === "ticket_handler") {
-      await this.ticketAgent.process(state);
-    } else if (state.intent === "compliance_checker") {
-      state.sub_results.security_guidance = "...";
-    } else {
-      await this.knowledgeAgent.process(state);
-    }
-
-    await this.complianceAgent.process(state);
-    state.final_response = this.synthesize(state);
-    return state;
-  });
-}
+const graph = new StateGraph(AgentStateSchema)
+  .addNode("intent_router", routeIntent)
+  .addNode("knowledge_rag", runKnowledge, { retryPolicy: { maxAttempts: 2 } })
+  .addNode("ticket_handler", runTicket, { retryPolicy: { maxAttempts: 2 } })
+  .addNode("compliance_check", runCompliance)
+  .addNode("synthesize", synthesize)
+  .addEdge(START, "intent_router")
+  .addConditionalEdges("intent_router", (state) => state.intent, routeMap)
+  .addEdge("knowledge_rag", "compliance_check")
+  .addEdge("ticket_handler", "compliance_check")
+  .addEdge("compliance_check", "synthesize")
+  .addEdge("synthesize", END)
+  .compile({ checkpointer: new MemorySaver() });
 ```
 
 **Node.js特有设计**：
-- 使用 `async/await` 表达工作流，每个 Agent 保持统一的 `process(state)` 契约
-- State 是一次请求独享的普通对象，Agent 通过 `sub_results` 写入独立结果
+- 使用 LangGraph.js `StateGraph`表达条件边与汇聚边，每个 Agent 保持统一的 `process(state)` 契约
+- `StateSchema`定义字段，`MessagesValue`负责消息reducer，`MemorySaver`按thread保存Checkpoint
 - 合规检查位于统一汇聚点，无论哪个业务分支都不能绕过
 - I/O 型 Agent 可通过 `Promise.all()` 并发，适合 LLM、Redis、HTTP 工具调用等场景
 
@@ -347,9 +337,15 @@ MCP Server 支持工具注册、`tools/list`、`tools/call`、`ping`、必填参
 ### 4.5 分层记忆与可测试性
 
 - `WorkingMemory`：使用私有 `Map` 保存会话上下文和最近50条状态变更
-- `ShortTermMemory`：使用滑动窗口保存最近N条消息，并在访问时执行TTL过期清理
-- `LongTermMemory`：对中文生成二元词组、对英文提取单词，实现零依赖关键词排序
+- `ShortTermMemory`：通过Redis List保存最近N条消息并刷新TTL，连接失败时回退Map
+- `LongTermMemory`：配置API Key时缓存文档Embedding并执行余弦相似度检索；失败时对中文生成二元词组、对英文提取单词做关键词排序
 - `node:test`：直接启动随机端口，验证聊天、历史、RAG、MCP和PII审查的完整链路
+
+### 4.6 LLM与OpenTelemetry
+
+配置`OPENAI_API_KEY`后，`createChatModel()`创建LangChain `ChatOpenAI`，`createEmbeddingsModel()`创建`OpenAIEmbeddings`：意图与工单使用Zod结构化输出，RAG执行Embedding召回、Query改写、重排序和生成，合规Agent执行规则+LLM两阶段审查。任何模型异常都会降级到本地规则，不影响主接口可用性。
+
+`trace()`使用OpenTelemetry API包裹每个Agent；配置`OTEL_EXPORTER_OTLP_ENDPOINT`后启动NodeSDK和OTLP HTTP Exporter。即使没有Collector，进程内指标仍通过`/api/metrics`可见。
 
 ## 5. 设计模式总结
 

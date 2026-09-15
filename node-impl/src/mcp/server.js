@@ -1,7 +1,12 @@
+/**
+ * MCP工具服务端的Node.js实现。
+ * 支持工具注册/发现/调用、基础参数校验、JSON-RPC 2.0与调用日志。
+ */
 export class MCPToolServer {
   #tools = new Map();
   #callLog = [];
 
+  /** 注册工具并返回this，支持链式装配默认工具。 */
   register(tool) {
     if (!tool?.name || typeof tool.handler !== "function") {
       throw new TypeError("MCP tool requires a name and handler");
@@ -10,12 +15,14 @@ export class MCPToolServer {
     return this;
   }
 
+  /** 返回不包含handler实现的公开工具Schema。 */
   listTools(category) {
     return [...this.#tools.values()]
       .filter((tool) => !category || tool.category === category)
       .map(({ handler: _handler, inputSchema, ...tool }) => ({ ...tool, inputSchema }));
   }
 
+  /** 校验参数、调用handler，并把结果写入最近100条审计日志。 */
   async callTool(name, arguments_ = {}) {
     const tool = this.#tools.get(name);
     const startedAt = performance.now();
@@ -40,6 +47,7 @@ export class MCPToolServer {
     return response;
   }
 
+  /** 处理MCP使用的JSON-RPC 2.0 ping/tools/list/tools/call请求。 */
   async handleJsonRpc(request) {
     const id = request?.id ?? null;
     if (request?.jsonrpc !== "2.0") {
@@ -69,6 +77,10 @@ export class MCPToolServer {
   }
 }
 
+/**
+ * 注册与其他语言版本对应的四个默认工具。
+ * handler当前返回演示数据，生产环境应改为调用订单、知识库、工单和风控服务。
+ */
 export function createDefaultTools(server, { ticketAgent } = {}) {
   return server
     .register({

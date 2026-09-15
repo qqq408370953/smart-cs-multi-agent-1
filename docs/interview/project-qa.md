@@ -3,6 +3,8 @@
 > 模拟面试官针对项目的深入追问，提供标准回答和踩坑分享。
 > 每个问题按"问题 → 标准回答 → 追问升级 → 踩坑分享"组织。
 
+> 回答时要区分实现：Python版使用LangGraph，Node.js版使用LangGraph.js；两者都有StateGraph与MemorySaver Checkpoint。Node.js还接入ChatOpenAI、Redis和OpenTelemetry，并在外部服务缺失时自动降级。持久化Checkpointer、向量库和真实工单数据库仍是演进项。
+
 ---
 
 ## Q1: "你的Supervisor编排和简单的if-else路由有什么区别？"
@@ -13,11 +15,11 @@
 
 1. **状态管理**：Supervisor维护全局State，各Agent共享读写，支持复杂的多步骤流程
 2. **流程编排**：支持条件分支、并行执行、循环重试，不只是单一路由
-3. **检查点恢复**：基于LangGraph的Checkpoint，长流程中断可以从断点恢复
-4. **Human-in-the-Loop**：可以在任意节点插入人工审批环节
-5. **可观测性**：每个节点自动生成追踪Span，if-else做不到
+3. **检查点恢复**：Python与Node.js均基于LangGraph MemorySaver保存节点快照，生产可换持久化Saver
+4. **Human-in-the-Loop**：Checkpoint为图中断和恢复提供基础；当前Node API对敏感请求返回转人工提示
+5. **可观测性**：Node.js统一包装节点，创建OpenTelemetry Span并记录聚合指标
 
-简单来说，if-else只能做"选A还是选B"，Supervisor可以做"先A、然后B和C并行、B的结果给D审查、审查不通过回到A"。
+简单来说，路由条件只负责“选A还是选B”，Supervisor还负责共享State、固定合规汇聚点、结果合成、记忆和追踪。Node.js使用`addConditionalEdges()`表达分支，用固定边保证知识/工单/安全分支全部进入合规节点。
 
 ### 踩坑分享
 
@@ -53,7 +55,7 @@
 
 ### 追问升级：缓存击穿怎么处理？
 
-短期记忆用Redis存储。缓存击穿指热点session的Redis key过期时，大量请求同时查Redis miss然后打到后端。
+生产短期记忆通常用Redis存储。缓存击穿指热点session的Redis key过期时，大量请求同时查Redis miss然后打到后端。Node.js使用Redis List + LTRIM + EXPIRE，未配置或连接失败才回退Map；分布式部署必须配置Redis，不能依赖进程内回退。
 
 解决方案：
 1. **互斥锁**：第一个请求发现miss后加锁重建缓存，其他请求等待
@@ -88,6 +90,8 @@
 - 规则通过 → LLM审查 → 通过则放行
 - 整体漏判率<0.5%，误判率<2%
 
+Node.js实现了两阶段审查：第一阶段覆盖违禁金融用语、手机号、身份证号、银行卡号、邮箱和PII脱敏；规则通过且配置API Key后，再用ChatOpenAI结构化输出检查隐性承诺、越权和歧视内容。没有Key或LLM失败时保留规则结果，但不能引用未实测的误判率。
+
 ### 踩坑分享
 
 > 早期只用规则引擎，结果有个用户问"你能保证我不亏钱吗"，Agent回复"虽然不能保证但风险很低"——规则引擎没检出"风险很低"这种隐晦的违规表述，但监管认为这有误导性。加了LLM审查后这类case被成功拦截。
@@ -106,6 +110,8 @@
    - 工单处理超时 → 返回"工单提交中，请稍后查看"
    - 合规审查超时 → 按"不通过"处理，转人工审核
 3. **自动工单**：超时事件自动创建内部告警工单，技术团队排查
+
+Node.js的LangGraph知识和工单节点配置`retryPolicy: { maxAttempts: 2 }`，ChatOpenAI另有`LLM_TIMEOUT_MS`和SDK重试；API层统一捕获未恢复异常。工具级熔断和持久化告警工单仍需生产化补充，合规超时应进一步改为fail-closed。
 
 ```python
 try:
@@ -179,23 +185,24 @@ CrewAI的优势是上手更简单（Agent/Task/Crew三层抽象很直观），�
 
 ---
 
-## Q8: "Node.js、Go和Python版本有什么性能差异？"
+## Q8: "Python、Java、Go和Node.js四个版本有什么性能差异？"
 
 ### 标准回答
 
 在不调用LLM API的纯系统开销测试中：
 
-| 指标 | Python (LangGraph) | Go (Eino) | Node.js (原生编排) |
-|------|-------------------|-----------|----------------------|
-| 单请求延迟（不含LLM） | ~15ms | ~2ms | ~2-5ms |
-| 内存占用（空载） | ~200MB | ~30MB | ~40-80MB |
-| 并发处理 | asyncio事件循环 | goroutine并发 | Event Loop + Promise |
-| Agent调度开销 | ~5ms | ~0.5ms | ~1ms |
+| 指标 | Python (LangGraph) | Java (Spring AI) | Go (原生+Gin) | Node.js (LangGraph.js) |
+|------|-------------------|------------------|-----------|----------------------|
+| 单请求延迟（不含LLM） | ~15ms | ~5-10ms | ~2ms | ~2-5ms |
+| 内存占用（空载） | ~200MB | ~300MB | ~30MB | ~40-80MB |
+| 并发处理 | asyncio事件循环 | 线程池/虚拟线程 | goroutine并发 | Event Loop + Promise |
+| Agent调度开销 | ~5ms | ~2-3ms | ~0.5ms | ~1ms |
 
 但实际场景中，**LLM API调用是绝对瓶颈**（1-3秒），系统本身的开销在整体延迟中占比<5%。
 
 选Go的场景：高并发（QPS>1000）、内存敏感（容器资源限制）、与Go微服务生态融合。
 选Python的场景：AI生态丰富（LangChain/LangGraph）、开发效率高、团队Python技术栈。
+选Java的场景：已有Spring微服务体系、强调类型约束、治理能力和企业中间件集成。
 选Node.js的场景：团队以TypeScript/JavaScript为主、需要与Web/BFF共用模型、强调SSE流式输出和MCP工具集成。CPU密集的本地推理或文本计算应放入Worker Thread，或拆到独立服务，避免阻塞事件循环。
 
 > 表中数字是同量级环境下的参考估算，不应当成项目实测结果。面试时应说明机器规格、并发数、Mock LLM方式和P95/P99数据来源。

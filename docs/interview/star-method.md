@@ -67,9 +67,9 @@
 > - CrewAI：上手简单，但对复杂编排的控制力不够
 > - Spring AI：Java生态成熟，企业级特性完善，但AI社区生态不如Python
 > - Eino：Go运行时资源占用低、并发模型清晰，但前端团队接入成本较高
-> - Node.js原生编排：与Web/BFF技术栈一致，SSE和MCP接入直接，但CPU密集任务需要Worker Thread或独立服务
+> - LangGraph.js：与Web/BFF技术栈一致，具备StateGraph、Checkpoint和流式能力，但CPU密集任务仍需要Worker Thread或独立服务
 >
-> 我的决策是：**用Python/LangGraph做MVP快速验证，同时提供Java、Go和Node.js版本给不同团队使用**。Node.js版本先用零依赖的显式State和async/await实现协议与流程，生产升级时再按复杂度决定是否引入LangGraph.js。
+> 我的决策是：**用Python/LangGraph做MVP快速验证，同时提供Java、Go和Node.js版本给不同团队使用**。Node.js版本使用LangGraph.js对齐StateGraph与Checkpoint，并用原生HTTP承载REST、SSE和MCP接口。
 >
 > **向量数据库**：
 > - FAISS：Facebook开源，单机性能最好，毫秒级响应，但需要自己管理
@@ -102,6 +102,24 @@
 
 ### R
 > 上线3个月内，线上合规事故为零；badcase追踪从之前的"看日志找半天"变成"5分钟定位根因"；意图路由准确率从85%优化到93%。
+
+---
+
+## 场景五："为什么还要做Node.js版本？"
+
+### S
+> 原有系统分别提供Python、Java和Go实现，但Web/BFF团队主要使用JavaScript/TypeScript。跨语言调试Agent接口、SSE响应和MCP工具时，需要额外维护网关适配层，本地演示也依赖多套包管理环境。
+
+### T
+> 我需要提供一个Node.js 20+版本，复用相同的Supervisor、四类Agent、三层记忆和MCP接口语义，同时保证没有API Key、Redis Server和OTLP Collector等外部服务时也能启动和测试。
+
+### A
+> 我采用LangGraph.js StateGraph和MemorySaver实现条件路由、统一合规汇聚与Checkpoint，用构造器注入ChatOpenAI、OpenAI Embeddings、Agent和Memory；使用`node:http`同时提供REST、SSE和MCP JSON-RPC 2.0；短期记忆使用Redis List + TTL并在连接失败时回退Map，长期记忆优先使用Embedding余弦检索并回退中英文关键词匹配；OpenTelemetry通过OTLP导出Span；最后用`node:test`启动随机端口验证路由、历史、Checkpoint、LLM链路、向量召回、MCP和PII脱敏。
+>
+> 这里有一个重要取舍：LangGraph.js、ChatOpenAI、Redis和OpenTelemetry作为正式依赖接入，但外部API Key、Redis Server和Collector不是本地启动的硬条件。缺失时会分别降级为规则推理、Map会话和本地指标；长期召回仍保留可替换接口，后续接向量库不需要重写API和Agent契约。
+
+### R
+> Node.js版本安装npm依赖后即可`npm start`，并统一暴露`/api/chat`、`/api/chat/stream`、`/api/tools/call`和`/mcp`。自动化测试覆盖八条核心链路，调用指标可通过`/api/metrics`查看。实际业务QPS、准确率和成本收益需要在接入真实LLM与生产存储后压测，不能使用演示环境数字代替。
 
 ---
 

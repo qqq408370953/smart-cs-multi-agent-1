@@ -1,11 +1,21 @@
 {
   "name": "smart-cs-multi-agent-node",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "description": "智能客服多 Agent 系统的 Node.js 实现",
   "type": "module",
   "engines": {
     "node": ">=20"
+  },
+  "dependencies": {
+    "@langchain/core": "^1.2.11",
+    "@langchain/langgraph": "^1.4.15",
+    "@langchain/openai": "^1.5.13",
+    "@opentelemetry/api": "^1.9.1",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.222.0",
+    "@opentelemetry/sdk-node": "^0.222.0",
+    "redis": "^6.2.1",
+    "zod": "^4.6.5"
   },
   "scripts": {
     "start": "node src/main.js",

@@ -17,7 +17,7 @@
 - [系统架构](#-系统架构)
 - [核心功能](#-核心功能)
 - [技术栈](#-技术栈)
-- [三语言实现对比](#-三语言实现对比)
+- [四语言实现对比](#-四语言实现对比)
 - [快速开始](#-快速开始)
 - [项目结构](#-项目结构)
 - [核心代码解析](#-核心代码解析)
@@ -34,14 +34,14 @@
 **这个项目能帮你做什么？**
 
 - ✅ **面试加分项**：拥有一个真实完整的多Agent项目，不再只是CRUD
-- ✅ **三语言实现**：Python/Java/Go均有完整代码，适配不同岗位需求
+- ✅ **四语言实现**：Python / Java / Go / Node.js 均提供独立实现，适配不同岗位与团队技术栈
 - ✅ **面试材料齐全**：简历模板、STAR话术、八股文题库一应俱全
 - ✅ **学习参考**：代码有详细注释，架构文档有图文说明
 
 **适合人群：**
 - 准备AI/后端岗位面试的同学
 - 想了解多Agent系统架构的开发者
-- 对LangGraph/Spring AI/Eino感兴趣的工程师
+- 对 LangGraph / Spring AI / Go原生Supervisor / LangGraph.js 编排感兴趣的工程师
 
 ---
 
@@ -55,7 +55,8 @@
         ▼
 ┌──────────────────────┐
 │   API Gateway        │  ← 认证、限流、日志
-│   (FastAPI / Spring) │
+│ FastAPI/Spring/Gin/  │
+│      Node.js         │
 └──────────┬───────────┘
            │
            ▼
@@ -79,7 +80,7 @@
                   ▼              ▼
            ┌──────────────────────────────┐
            │         MCP 工具协议层         │
-           │  订单查询 | 工单CRUD | 风控接口  │
+           │  订单查询 | 工单创建 | 风控接口  │
            │  知识库搜索 | 用户画像查询       │
            └──────────────────────────────┘
 ```
@@ -87,13 +88,13 @@
 ### 请求处理流程
 
 ```
-① 用户发送消息："我的订单什么时候到？"
+① 用户发送消息："理财产品的投资期限是多久？"
         ↓
-② Supervisor 分析意图 → 路由决策
+② Supervisor 启动编排 → 调用意图路由Agent
         ↓
-③ 意图路由 Agent 识别意图: "order_query"
+③ 意图路由 Agent 识别分支: "knowledge_rag"
         ↓
-④ 知识检索 Agent → 调用MCP工具查询订单
+④ 知识检索 Agent → Query改写、检索、重排与回答生成
         ↓
 ⑤ 合规审查 Agent → 检查回复内容合规性
         ↓
@@ -110,18 +111,18 @@
 | 特性 | 说明 |
 |------|------|
 | 中央协调 | 由Supervisor统一调度，子Agent只做专业工作 |
-| 并行调度 | 多个Agent可同时工作，提升处理速度 |
-| Human-in-the-Loop | 敏感问题自动暂停，等待人工确认 |
-| 断点恢复 | 使用LangGraph Checkpoint，对话可中断续接 |
+| 异步调度 | 统一调度各Agent；独立I/O任务可扩展并行执行 |
+| Human-in-the-Loop | Python与Node.js的Checkpoint为中断/恢复扩展提供基础；当前敏感请求采用转人工响应 |
+| 断点恢复 | Python与Node.js均使用LangGraph MemorySaver Checkpoint；生产可替换持久化Saver |
 
 ### 2. 分层记忆系统
 **为什么需要三层记忆？** 类似人类记忆：工作桌(工作记忆) + 笔记本(短期) + 大脑长期记忆。
 
 | 记忆层 | 存储位置 | 生命周期 | 延迟 | 用途 |
 |--------|----------|----------|------|------|
-| **工作记忆** | 进程内存 (dict) | 单次请求 | <1ms | 当前推理状态、路由决策上下文 |
-| **短期记忆** | Redis | TTL 30分钟 | 1-5ms | 多轮对话上下文（保留最近20轮） |
-| **长期记忆** | FAISS/Milvus 向量库 | 永久 | 10-50ms | 知识库、用户画像、历史工单 |
+| **工作记忆** | 进程内存（dict / Map / struct） | 单次请求/进程 | <1ms | 当前推理状态、路由决策上下文 |
+| **短期记忆** | Redis；Node.js连接失败回退Map，Go演示版使用内存 | TTL 30分钟 | 1-5ms | 多轮对话上下文（最多20条消息） |
+| **长期记忆** | FAISS/Milvus；Node.js为OpenAI Embeddings内存向量+关键词回退，Go为关键词索引 | 按实现而定 | 1-50ms | 知识库、用户画像、历史工单 |
 
 ### 3. MCP 工具协议
 **什么是MCP？** Model Context Protocol，AI模型调用外部工具的标准协议，类似HTTP规范了Web通信。
@@ -142,10 +143,11 @@
 
 已实现的MCP工具：
 - `order_query` — 查询订单状态、物流信息
-- `ticket_create` / `ticket_update` — 工单创建和更新
+- `ticket_create` — 创建客服工单
 - `risk_check` — 金融风控接口
-- `kb_search` — 知识库全文搜索
-- `user_profile` — 用户画像查询
+- `knowledge_search` — 知识库搜索
+
+Node.js 版本同时暴露普通 REST 工具调用接口 `POST /api/tools/call` 和 JSON-RPC 2.0 入口 `POST /mcp`。
 
 ### 4. RAG 知识检索
 **什么是RAG？** Retrieval-Augmented Generation，先从知识库检索相关内容，再让AI生成回答，避免AI"瞎编"。
@@ -163,7 +165,7 @@
 ```
 
 ### 5. 全链路追踪 (OpenTelemetry)
-可以清楚地看到每次请求经过哪些Agent、每个步骤耗时多少、消耗了多少Token：
+可以清楚地看到每次请求经过哪些Agent、每个步骤耗时多少。接入模型Token回调后还可继续记录Token消耗：
 
 ```
 [Root] user_request (总耗时: 2.8s, 总Token: 1850)
@@ -176,6 +178,8 @@
   ├── [Span] compliance_checker.process    → 600ms, 400 tokens
   └── [Span] supervisor.synthesize         → 50ms
 ```
+
+Node.js 已接入 OpenTelemetry NodeSDK：配置 `OTEL_EXPORTER_OTLP_ENDPOINT` 后生成Supervisor和各Agent的真实Span并通过OTLP HTTP导出，同时保留调用次数、耗时和错误率聚合指标，通过 `/api/metrics` 暴露。上图的细粒度RAG子Span和Token属性是生产化扩展目标。
 
 ### 6. 合规审查
 专为金融场景设计：
@@ -190,12 +194,12 @@
 
 | 层次 | 技术选型 | 说明 |
 |------|----------|------|
-| **AI框架** | LangGraph / Spring AI / Eino | 多Agent编排 |
+| **AI编排** | LangGraph / Spring AI / Go原生Supervisor / LangGraph.js | 多Agent编排 |
 | **LLM** | GPT-4o / Claude 3.5 | 大语言模型 |
-| **向量数据库** | FAISS (开发) / Milvus (生产) | 知识检索 |
-| **缓存** | Redis | 短期记忆、会话管理 |
-| **追踪** | OpenTelemetry + Jaeger | 全链路追踪 |
-| **API** | FastAPI / Spring Boot / Gin | REST接口 |
+| **检索** | FAISS / Milvus / Node.js OpenAI Embeddings + 关键词回退 | 知识检索 |
+| **缓存** | Redis / 进程内Map回退 | 短期记忆、会话管理 |
+| **追踪** | OpenTelemetry + Jaeger + 进程内聚合指标 | 调用追踪与性能指标 |
+| **API** | FastAPI / Spring Boot / Gin / node:http | REST接口，Node.js另提供SSE |
 | **容器** | Docker + Docker Compose | 一键部署 |
 | **协议** | MCP (Model Context Protocol) | 工具调用标准 |
 
@@ -203,12 +207,19 @@
 
 ## 🔀 四语言实现对比
 
-| 维度 | Python (LangGraph) | Java (Spring AI) | Go (Eino) | Node.js |
+| 维度 | Python (LangGraph) | Java (Spring AI) | Go (原生+Gin) | Node.js (LangGraph.js) |
 |------|-------------------|------------------|-----------|---------|
 | **目录** | [`python-impl/`](./python-impl/) | [`java-impl/`](./java-impl/) | [`go-impl/`](./go-impl/) | [`node-impl/`](./node-impl/) |
-| **编排框架** | LangGraph StateGraph | Spring AI Agent | Eino Graph/Workflow | 原生异步编排 |
-| **状态管理** | TypedDict + Checkpoint | POJO | struct | Object + Map |
+| **编排框架** | LangGraph StateGraph | Spring AI Agent | 原生Supervisor | LangGraph.js StateGraph |
+| **状态管理** | TypedDict + Checkpoint | POJO | struct | StateSchema + MessagesValue + Checkpoint |
 | **并行方式** | asyncio | CompletableFuture | goroutine | Promise / Event Loop |
+| **API服务** | FastAPI | Spring Boot | Gin | 原生node:http + SSE |
+| **短期记忆** | Redis（失败回退内存） | Redis/本地实现 | 内存演示实现 | Redis（失败/未配置回退Map+TTL） |
+| **长期检索** | FAISS/关键词回退 | 向量库抽象 | 关键词检索 | OpenAI Embeddings内存向量/关键词回退 |
+| **MCP入口** | 工具服务类 | 工具服务类 | 工具服务类 | REST + JSON-RPC `/mcp` |
+| **LLM调用** | ChatOpenAI | Spring AI ChatClient | 规则演示 | LangChain ChatOpenAI（无Key规则降级） |
+| **追踪** | OpenTelemetry | OpenTelemetry/Micrometer | 指标包装 | OpenTelemetry NodeSDK + 聚合指标 |
+| **运行依赖** | pip依赖 | Maven依赖 | Go modules | npm依赖 |
 | **生态** | LangSmith / LangServe | Spring 全家桶 | CloudWeGo | npm / Web 全栈 |
 | **适合场景** | AI原型、数据科学团队 | 企业级金融/银行 | 高并发云原生微服务 | Web全栈、BFF、快速集成 |
 | **生产成熟度** | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐ | ⭐⭐⭐ | ⭐⭐⭐⭐ |
@@ -219,15 +230,15 @@
 ## 🚀 快速开始
 
 ### 前置条件
-- 一个 OpenAI API Key（或其他LLM的Key）
+- Python/Java版本需要一个 OpenAI API Key（或兼容LLM的Key）；Node.js与当前Go演示版可无Key运行
 - Docker（可选，用于一键启动）
 
 ### 方式一：Docker 一键启动（推荐新手）
 
 ```bash
 # 1. 克隆项目
-git clone https://github.com/bcefghj/smart-cs-multi-agent.git
-cd smart-cs-multi-agent
+git clone https://github.com/qqq408370953/smart-cs-multi-agent-1.git
+cd smart-cs-multi-agent-1
 
 # 2. 配置API Key
 cp python-impl/.env.example python-impl/.env
@@ -238,6 +249,7 @@ docker-compose up -d
 
 # 4. 访问接口
 # API文档: http://localhost:8000/docs
+# Node API: http://localhost:8100/health
 # 追踪UI:  http://localhost:16686 (Jaeger)
 ```
 
@@ -260,7 +272,7 @@ cp .env.example .env
 python -m api.main
 
 # 测试接口（新开终端）
-curl -X POST http://localhost:8000/chat \
+curl -X POST http://localhost:8000/api/chat \
   -H "Content-Type: application/json" \
   -d '{"user_id": "user_001", "message": "我想查询订单状态"}'
 ```
@@ -301,11 +313,18 @@ go build -o smart-cs-agent .
 ```bash
 cd node-impl
 
-# 需要 Node.js 20+，无第三方运行时依赖
+# 需要 Node.js 20+
+npm install
 npm start
 
 # 测试
 npm test
+
+# 健康检查与聊天接口
+curl http://localhost:8100/health
+curl -X POST http://localhost:8100/api/chat \
+  -H "Content-Type: application/json" \
+  -d '{"user_id":"user_001","message":"理财产品的投资期限是多久？"}'
 ```
 
 ---
@@ -348,7 +367,7 @@ smart-cs-multi-agent/
 │   ├── 📄 Dockerfile
 │   └── 📂 src/main/java/com/smartcs/
 │
-├── 📂 go-impl/                     ← Go实现 (Eino框架)
+├── 📂 go-impl/                     ← Go实现 (原生Supervisor + Gin)
 │   ├── 📄 go.mod                   ← Go依赖管理
 │   ├── 📄 main.go                  ← 程序入口
 │   ├── 📄 Dockerfile
@@ -357,7 +376,7 @@ smart-cs-multi-agent/
 │   ├── 📂 mcp/                     ← MCP协议
 │   └── 📂 tracing/                 ← 链路追踪
 │
-└── 📂 node-impl/                   ← Node.js实现 (原生ESM)
+└── 📂 node-impl/                   ← Node.js实现 (LangGraph.js + 原生ESM)
     ├── 📄 package.json
     ├── 📄 Dockerfile
     ├── 📂 src/                     ← Agent、记忆、MCP、API实现
@@ -446,6 +465,29 @@ order_query_tool = {
 }
 ```
 
+### Supervisor 编排核心逻辑（Node.js）
+
+Node.js 版使用 LangGraph.js StateGraph 表达同一条编排链，所有业务结果同样必须经过合规审查：
+
+```javascript
+// node-impl/src/agents/supervisor.js
+const graph = new StateGraph(AgentStateSchema)
+  .addNode("intent_router", routeIntent)
+  .addNode("knowledge_rag", runKnowledgeAgent, { retryPolicy: { maxAttempts: 2 } })
+  .addNode("ticket_handler", runTicketAgent, { retryPolicy: { maxAttempts: 2 } })
+  .addNode("compliance_check", runComplianceAgent)
+  .addNode("synthesize", synthesizeResponse)
+  .addEdge(START, "intent_router")
+  .addConditionalEdges("intent_router", selectRoute, routeMap)
+  .addEdge("knowledge_rag", "compliance_check")
+  .addEdge("ticket_handler", "compliance_check")
+  .addEdge("compliance_check", "synthesize")
+  .addEdge("synthesize", END)
+  .compile({ checkpointer: new MemorySaver() });
+```
+
+Node.js 版还提供 `node:http` REST API、SSE响应、MCP JSON-RPC 2.0、Redis/Map回退短期记忆、ChatOpenAI可选LLM链路、OpenTelemetry OTLP导出及 `node:test` 集成测试。没有API Key或外部服务时会自动切换到确定性本地降级路径。
+
 ---
 
 ## 📚 面试准备材料
@@ -454,7 +496,7 @@ order_query_tool = {
 
 | 文档 | 内容说明 | 链接 |
 |------|----------|------|
-| **简历模板** | STAR法则项目经历写法，覆盖Python/Java/Go不同岗位角度 | [查看](./docs/interview/resume-template.md) |
+| **简历模板** | STAR法则项目经历写法，覆盖Python/Java/Go/Node.js不同岗位角度 | [查看](./docs/interview/resume-template.md) |
 | **STAR面试话术** | "请介绍你的项目"等高频问题的标准回答模板 | [查看](./docs/interview/star-method.md) |
 | **八股文题库** | 30+高频面试题 + 详细答案 + 追问应对策略 | [查看](./docs/interview/baguwen.md) |
 | **项目深度追问** | 面试官最爱问的20+深度问题 + 踩坑分享 | [查看](./docs/interview/project-qa.md) |

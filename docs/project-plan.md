@@ -92,7 +92,7 @@ smart-cs-multi-agent/
 │   ├── pom.xml
 │   └── Dockerfile
 │
-├── go-impl/                           # Go实现 (Gin + 原生并发)
+├── go-impl/                           # Go实现 (Gin + 原生Supervisor)
 │   ├── agent/                         # Agent实现
 │   ├── memory/                        # 分层记忆
 │   ├── mcp/                           # MCP集成
@@ -102,12 +102,13 @@ smart-cs-multi-agent/
 │   ├── main.go
 │   └── Dockerfile
 │
-├── node-impl/                         # Node.js实现 (原生ESM)
+├── node-impl/                         # Node.js实现 (LangGraph.js + 原生ESM)
 │   ├── src/
 │   │   ├── agents/                    # Supervisor与业务Agent
-│   │   ├── memory/                    # Map实现的三层记忆抽象
+│   │   ├── memory/                    # Redis/Map分层记忆
 │   │   ├── mcp/                       # MCP JSON-RPC服务
-│   │   ├── tracing/                   # 调用追踪与聚合指标
+│   │   ├── tracing/                   # OpenTelemetry与聚合指标
+│   │   ├── llm/                       # LangChain ChatOpenAI
 │   │   ├── api/                       # REST + SSE服务
 │   │   ├── app.js                     # 依赖装配
 │   │   └── main.js                    # 程序入口
@@ -123,13 +124,13 @@ smart-cs-multi-agent/
 
 ### 3.1 Supervisor编排模式
 - Supervisor作为中央协调者，接收用户请求后决定分发给哪个子Agent
-- 支持并行调用多个Agent（如同时查知识库+检查合规）
-- 实现 Human-in-the-Loop 断点，敏感操作需人工审批
+- 当前按路由顺序调用单个业务Agent并统一执行合规审查；独立I/O任务可安全扩展并行
+- Python与Node.js版均通过LangGraph StateGraph和MemorySaver保存Checkpoint，为恢复和Human-in-the-Loop扩展提供基础
 
 ### 3.2 分层记忆系统
 - **工作记忆**：当前对话的中间推理状态（存于Agent State，进程内，零延迟）
-- **短期记忆**：最近N轮对话上下文（Redis, TTL 30分钟，滑动窗口淘汰）
-- **长期记忆**：用户画像+历史工单+知识库（向量数据库 FAISS/Milvus，持久化）
+- **短期记忆**：最近N轮对话上下文（Python与Node.js均支持Redis不可用时回退内存）
+- **长期记忆**：用户画像+历史工单+知识库（Python面向FAISS/Milvus；Node.js使用OpenAI Embeddings内存向量并在失败时回退关键词索引）
 
 ### 3.3 MCP工具协议
 - 遵循 Model Context Protocol 标准，Agent通过 JSON-RPC 2.0 调用外部工具
@@ -137,14 +138,14 @@ smart-cs-multi-agent/
 - 统一工具注册/发现机制（tools/list + tools/call），支持动态扩展
 
 ### 3.4 全链路追踪
-- OpenTelemetry 标准集成，每个Agent调用生成 Span
+- Node.js通过OpenTelemetry NodeSDK生成Span并支持OTLP HTTP导出，同时由`trace()`聚合调用次数、耗时和错误率
 - 追踪链路：用户请求 → Supervisor → 子Agent → 工具调用 → 响应
 - 关键指标：延迟、Token消耗、Agent路由准确率、工具调用成功率
 
 ### 3.5 合规审查（金融场景）
-- 两阶段机制：规则引擎毫秒级快筛 + LLM深度审查
+- Python与Node.js均实现规则引擎毫秒级快筛 + ChatOpenAI深度审查；Node.js无API Key时自动保留规则层
 - 检查维度：敏感词、PII泄露、越权承诺、违规金融用语
-- 规则引擎保底（召回率>99%），LLM提升精确率（>95%）
+- 规则指标与LLM精确率必须通过业务标注集实测，不能直接把规划值当作当前实现结果
 
 ## 四、面试准备材料
 
@@ -194,21 +195,21 @@ smart-cs-multi-agent/
 - "系统QPS能到多少？瓶颈在哪里？"
 - "你的Supervisor编排和简单的if-else路由有什么区别？"
 - "RAG检索的准确率怎么评估？"
-- "Node.js、Go和Python版本有什么性能差异？"
+- "Python、Java、Go和Node.js四个版本有什么性能差异？"
 
 ## 五、四语言实现对比
 
-| 维度 | Python (LangGraph) | Java (Spring AI) | Go (原生+Gin) | Node.js (原生ESM) |
+| 维度 | Python (LangGraph) | Java (Spring AI) | Go (原生+Gin) | Node.js (LangGraph.js) |
 |------|-------------------|-----------------|--------------|-------------------|
-| 编排模型 | LangGraph StateGraph | Agent接口+组合模式 | goroutine+struct | async/await + 显式State |
-| 状态管理 | TypedDict + Checkpoint | POJO类 | 结构体指针 | Object + Map |
-| 并发能力 | asyncio协程 | CompletableFuture | goroutine真并行 | Event Loop + Promise |
+| 编排模型 | LangGraph StateGraph | Agent接口+组合模式 | 原生Supervisor+struct | LangGraph.js StateGraph |
+| 状态管理 | TypedDict + Checkpoint | POJO类 | 结构体指针 | StateSchema + Checkpoint |
+| 并发能力 | asyncio协程 | CompletableFuture | 当前顺序执行，可扩展goroutine | Event Loop + Promise |
 | API层 | FastAPI | Spring MVC | Gin | node:http + SSE |
 | 适合团队 | AI/数据团队 | 企业级Java团队 | Go微服务团队 | Node.js全栈/BFF团队 |
 | 单机QPS | 50-100（LLM瓶颈） | 200-500 | 500-2000 | 200-800（I/O型负载） |
 | 典型空载内存 | ~200MB | ~300MB | ~30MB | ~40-80MB |
 
-> QPS与内存数据是架构选型阶段的量级估算，正式简历或面试陈述应替换为目标部署环境中的实测数据。Node.js 版本当前以零依赖、易运行和标准协议演示为目标；生产环境可接入 LangGraph.js、Redis、向量数据库与 OpenTelemetry SDK。
+> QPS与内存数据是架构选型阶段的量级估算，正式简历或面试陈述应替换为目标部署环境中的实测数据。Node.js 已接入LangGraph.js、ChatOpenAI/OpenAI Embeddings、Redis与OpenTelemetry SDK；当前向量保存在进程内且工单使用内存库，生产环境应替换为持久化向量数据库与工单系统。
 
 ## 六、安全注意事项
 

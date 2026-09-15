@@ -26,6 +26,7 @@ services:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - OPENAI_BASE_URL=${OPENAI_BASE_URL:-https://api.openai.com/v1}
       - MODEL_NAME=${MODEL_NAME:-gpt-4o}
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-text-embedding-3-small}
       - REDIS_URL=redis://redis:6379/0
       - OTEL_SERVICE_NAME=smart-cs-python
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317
@@ -71,8 +72,17 @@ services:
       - "8100:8100"
     environment:
       - PORT=8100
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-https://api.openai.com/v1}
+      - MODEL_NAME=${MODEL_NAME:-gpt-4o}
+      - REDIS_URL=redis://redis:6379/0
       - SHORT_TERM_MAX_TURNS=20
       - SHORT_TERM_TTL_SECONDS=1800
+      - OTEL_SERVICE_NAME=smart-cs-node
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318
+    depends_on:
+      redis:
+        condition: service_healthy
 
   # Jaeger - 全链路追踪可视化 (可选)
   jaeger:

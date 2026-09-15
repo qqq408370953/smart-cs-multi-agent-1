@@ -3,8 +3,10 @@ import { randomUUID } from "node:crypto";
 import { createState } from "../agents/state.js";
 import { getMetrics } from "../tracing/tracer.js";
 
+// 防止客户端通过超大JSON请求持续占用服务内存。
 const MAX_BODY_BYTES = 1024 * 1024;
 
+/** 输出统一JSON响应，并为本地前端联调开放CORS。 */
 function sendJson(response, statusCode, body) {
   response.writeHead(statusCode, {
     "content-type": "application/json; charset=utf-8",
@@ -13,6 +15,7 @@ function sendJson(response, statusCode, body) {
   response.end(JSON.stringify(body));
 }
 
+/** 流式读取并解析请求体，超过1 MiB或JSON非法时返回客户端错误。 */
 async function readJson(request) {
   const chunks = [];
   let length = 0;
@@ -29,6 +32,10 @@ async function readJson(request) {
   }
 }
 
+/**
+ * 创建原生Node.js HTTP服务。
+ * API覆盖聊天、SSE、会话历史、MCP工具、指标和健康检查。
+ */
 export function createApiServer({ supervisor, shortTermMemory, mcpServer }) {
   return createServer(async (request, response) => {
     if (request.method === "OPTIONS") {
@@ -44,7 +51,12 @@ export function createApiServer({ supervisor, shortTermMemory, mcpServer }) {
       const url = new URL(request.url, "http://localhost");
 
       if (request.method === "GET" && url.pathname === "/health") {
-        return sendJson(response, 200, { status: "healthy", version: "1.0.0", runtime: "node" });
+        return sendJson(response, 200, {
+          status: "healthy",
+          version: "1.1.0",
+          runtime: "node",
+          orchestration: "langgraph",
+        });
       }
 
       if (request.method === "GET" && url.pathname === "/api/tools") {
@@ -63,7 +75,7 @@ export function createApiServer({ supervisor, shortTermMemory, mcpServer }) {
         const sessionId = decodeURIComponent(historyMatch[1]);
         return sendJson(response, 200, {
           session_id: sessionId,
-          messages: shortTermMemory.getHistory(sessionId),
+          messages: await shortTermMemory.getHistory(sessionId),
         });
       }
 
@@ -84,10 +96,10 @@ export function createApiServer({ supervisor, shortTermMemory, mcpServer }) {
 
         const sessionId = body.session_id || randomUUID();
         const userId = body.user_id || "anonymous";
-        shortTermMemory.addMessage(sessionId, "user", body.message);
+        await shortTermMemory.addMessage(sessionId, "user", body.message);
         const state = createState(userId, sessionId, body.message);
         const result = await supervisor.orchestrate(state);
-        shortTermMemory.addMessage(sessionId, "assistant", result.final_response);
+        await shortTermMemory.addMessage(sessionId, "assistant", result.final_response);
 
         const payload = {
           response: result.final_response,
@@ -96,6 +108,7 @@ export function createApiServer({ supervisor, shortTermMemory, mcpServer }) {
           compliance_passed: result.compliance_passed,
         };
 
+        // 当前SSE一次发送完整结果；接入流式LLM后可在此持续写入token事件。
         if (url.pathname.endsWith("/stream")) {
           response.writeHead(200, {
             "content-type": "text/event-stream; charset=utf-8",

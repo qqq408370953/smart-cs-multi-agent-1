@@ -40,7 +40,7 @@ go run main.go
 
 ```bash
 cd node-impl
-# Node.js 20+，当前实现无第三方运行时依赖
+npm install
 npm start
 ```
 
@@ -151,12 +151,14 @@ curl -N -X POST http://localhost:8100/api/chat/stream \
 | OPENAI_API_KEY | LLM API密钥 | 无 |
 | OPENAI_BASE_URL | API端点 | https://api.openai.com/v1 |
 | MODEL_NAME | 模型名称 | gpt-4o |
+| EMBEDDING_MODEL | Node.js向量模型 | text-embedding-3-small |
 | REDIS_URL | Redis地址 | redis://localhost:6379/0 |
 | OTEL_SERVICE_NAME | 追踪服务名 | smart-cs-multi-agent |
-| OTEL_EXPORTER_OTLP_ENDPOINT | OTLP端点 | http://localhost:4317 |
+| OTEL_EXPORTER_OTLP_ENDPOINT | OTLP端点（Node.js使用HTTP） | Node.js示例为http://localhost:4318 |
 | HOST | Node.js监听地址 | 0.0.0.0 |
 | PORT | 服务端口（各实现可覆盖） | Node.js为8100 |
 | SHORT_TERM_MAX_TURNS | Node.js短期记忆最大消息数 | 20 |
 | SHORT_TERM_TTL_SECONDS | Node.js短期记忆TTL（秒） | 1800 |
+| LLM_TIMEOUT_MS | Node.js单次LLM调用超时（毫秒） | 15000 |
 
-Node.js 当前实现不要求 `OPENAI_API_KEY`、Redis 或 OTLP 服务即可启动，适合本地演示和接口联调。接入生产级 LLM、Redis 和 OpenTelemetry 后，再配置对应的公共环境变量。
+Node.js 已接入LangGraph.js、ChatOpenAI、Redis和OpenTelemetry NodeSDK。`OPENAI_API_KEY`、`REDIS_URL`或`OTEL_EXPORTER_OTLP_ENDPOINT`未配置时，对应组件分别降级为规则Agent、进程内会话和本地聚合指标，因此仍可离线启动。

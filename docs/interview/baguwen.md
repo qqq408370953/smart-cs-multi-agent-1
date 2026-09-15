@@ -323,6 +323,20 @@ MCP（Model Context Protocol）是Anthropic开源的标准协议，定义了AI A
 3. **工具调用**：Agent通过`tools/call`方法传入参数，MCPToolServer路由到对应handler执行
 4. **日志记录**：每次调用记录工具名、参数、耗时、成功/失败，用于追踪分析
 
+Node.js版在`src/mcp/server.js`中使用`Map`保存工具定义，支持链式`register()`、必填参数校验和最近100条调用记录。它同时提供：
+- `GET /api/tools`：REST工具发现
+- `POST /api/tools/call`：REST工具调用
+- `POST /mcp`：JSON-RPC 2.0的`ping`、`tools/list`、`tools/call`
+
+```javascript
+const result = await mcpServer.handleJsonRpc({
+  jsonrpc: "2.0",
+  id: 1,
+  method: "tools/call",
+  params: { name: "risk_check", arguments: { user_id: "u1", action: "transfer" } },
+});
+```
+
 ---
 
 ### Q20: 工具调用失败怎么处理？
@@ -429,6 +443,17 @@ async def process(self, state):
 
 Span层级：
 ```
+
+Node.js版使用OpenTelemetry NodeSDK和相同的包装思路，同时维护进程内指标：
+
+```javascript
+return trace("knowledge_rag", "process", async () => {
+  // 执行业务Agent；创建Span并在finally中记录duration与success
+  return state;
+});
+```
+
+配置`OTEL_EXPORTER_OTLP_ENDPOINT`后，`trace()`创建的Span通过OTLP HTTP Exporter发送到Jaeger/Collector；`GET /api/metrics`同时返回`total_calls`、`total_time_ms`、`avg_time_ms`、`error_count`和`error_rate`。
 Root Span: user_request
   ├── supervisor.route_decision
   ├── knowledge_rag.process
@@ -486,6 +511,7 @@ LangSmith现在支持OpenTelemetry格式，可以用OTEL标准收集Trace再导�
 4. 请求排队 + 批处理
 
 Python版预估QPS：50-100（受LLM API限制）
+Java版预估QPS：100-300（取决于线程池、连接池与Spring链路开销）
 Go版预估QPS：200-500（Go本身开销极低，主要还是LLM瓶颈）
 Node.js版预估QPS：100-300（I/O型Agent链路下事件循环开销低，最终仍受LLM限流和延迟约束）
 

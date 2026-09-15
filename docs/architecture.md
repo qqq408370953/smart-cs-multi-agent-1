@@ -54,7 +54,7 @@
     │
     ├── intent == "knowledge_rag" ──► [知识检索Agent] ──┐
     ├── intent == "ticket_handler" ──► [工单处理Agent] ──┤
-    └── intent == "compliance"    ──► [合规审查Agent] ──┤
+    └── intent == "compliance"    ──► [安全提示节点] ────┤
                                                         │
                             ┌───────────────────────────┘
                             ▼
@@ -75,7 +75,7 @@
 | Supervisor | 编排调度、结果汇总 | 用户消息 + 全局State | 路由决策 + 最终回复 |
 | 意图路由 | 意图分类 | 用户消息 | intent标签 + 置信度 |
 | 知识检索 | RAG问答 | 用户问题 | 基于文档的回答 |
-| 工单处理 | 工单CRUD | 用户需求 | 工单号 + 状态 |
+| 工单处理 | 工单创建、查询、状态更新 | 用户需求 | 工单号 + 状态 |
 | 合规审查 | 内容审查 | Agent回复内容 | 通过/不通过 + 违规项 |
 
 ### 2.2 State设计
@@ -93,6 +93,27 @@ class AgentState(TypedDict):
     retry_count: int                  # 重试次数
 ```
 
+Node.js 使用同样的字段语义，以普通对象作为每次请求独享的 State：
+
+```javascript
+export function createState(userId, sessionId, userMessage) {
+  return {
+    messages: [new HumanMessage(userMessage)],
+    user_id: userId,
+    session_id: sessionId,
+    user_message: userMessage,
+    intent: "",
+    sub_results: {},
+    compliance_passed: true,
+    final_response: "",
+    current_agent: "",
+    retry_count: 0,
+  };
+}
+```
+
+Python与Node.js均通过LangGraph reducer/checkpoint管理图状态。Node.js使用`StateSchema`与`MessagesValue`，以`session_id`作为`thread_id`，由`MemorySaver`在每个节点保存快照；生产可替换为数据库Checkpointer。
+
 ### 2.3 分层记忆架构
 
 ```
@@ -106,21 +127,25 @@ class AgentState(TypedDict):
 │  └── 用途: 当前推理状态、路由决策上下文         │
 ├──────────────────────────────────────────────┤
 │  短期记忆 (Short-term Memory)                │
-│  ├── 存储: Redis                             │
+│  ├── 存储: Redis / 连接失败回退进程内存         │
 │  ├── 生命周期: TTL 30分钟                     │
 │  ├── 延迟: 1-5ms                             │
 │  ├── 容量: 最近20轮对话                       │
 │  └── 用途: 多轮对话上下文                     │
 ├──────────────────────────────────────────────┤
 │  长期记忆 (Long-term Memory)                 │
-│  ├── 存储: FAISS / Milvus                    │
+│  ├── 存储: FAISS / Milvus / 关键词索引         │
 │  ├── 生命周期: 永久                           │
 │  ├── 延迟: 10-50ms                           │
 │  └── 用途: 知识库、用户画像、历史工单          │
 └──────────────────────────────────────────────┘
 ```
 
+各语言使用相同的三层职责，但存储后端并不完全相同：Python优先Redis与FAISS，Java面向Spring生态适配，Go当前使用进程内实现；Node.js通过官方`redis`客户端实现TTL滑动窗口，未配置或连接失败时回退私有`Map`。Node.js长期记忆在配置API Key时使用OpenAI Embeddings和内存向量余弦检索，失败时回退中英文关键词索引。Memory类通过构造器注入，替换为持久化向量库时不需要修改编排流程。
+
 ## 3. RAG检索流程
+
+下图描述完整RAG流程。Python和Node.js均包含LLM Query改写、Top-5召回、结构化重排序与生成；Node.js召回层优先使用OpenAI Embeddings内存向量余弦检索，未配置API Key或Embedding调用失败时自动降级为中文二元词组/英文单词检索和模板回答。
 
 ```
 用户原始问题: "怎么退钱啊"
@@ -153,6 +178,8 @@ class AgentState(TypedDict):
 ## 4. MCP工具协议
 
 ```
+
+Node.js 的 `MCPToolServer` 原生处理 `ping`、`tools/list` 与 `tools/call`，提供必填字段校验和最近100条调用日志。`POST /mcp` 使用JSON-RPC 2.0，`POST /api/tools/call` 为普通REST客户端提供等价入口。
 ┌─────────────┐    JSON-RPC 2.0    ┌─────────────────┐
 │   Agent      │ ◄────────────────► │  MCP Tool Server │
 │              │                    │                  │
@@ -179,6 +206,8 @@ class AgentState(TypedDict):
 ```
 
 ## 5. 全链路追踪
+
+下面是OpenTelemetry Span目标结构。Node.js的`trace()`包装器使用OpenTelemetry API创建真实Span；配置OTLP HTTP端点后由NodeSDK导出至Jaeger，同时记录调用次数、总耗时、平均耗时和错误率并通过`GET /api/metrics`输出。
 
 ### Span层级结构
 
@@ -215,16 +244,16 @@ class AgentState(TypedDict):
 
 ### 编排框架对比
 
-| 维度 | LangGraph (Python) | Spring AI (Java) | Eino (Go) | Node.js 原生编排 |
+| 维度 | LangGraph (Python) | Spring AI (Java) | 原生编排 (Go) | LangGraph.js (Node.js) |
 |------|-------------------|------------------|-----------|------------------|
-| 编排模型 | 有向图StateGraph | Agent组合模式 | Graph/Workflow | Promise工作流 + 显式State |
-| 状态管理 | TypedDict + Checkpoint | POJO | struct | Object + Map |
+| 编排模型 | 有向图StateGraph | Agent组合模式 | 顺序Supervisor | 有向图StateGraph |
+| 状态管理 | TypedDict + Checkpoint | POJO | struct | StateSchema + Checkpoint |
 | 并行能力 | asyncio | CompletableFuture | goroutine | Event Loop + Promise |
-| 生态 | LangSmith/LangServe | Spring生态 | CloudWeGo | npm / Web全栈生态 |
+| 生态 | LangSmith/LangServe | Spring生态 | Gin / Go微服务 | npm / Web全栈生态 |
 | 适合团队 | AI/数据团队 | 企业级Java团队 | Go微服务团队 | Node.js全栈/BFF团队 |
 | 生产成熟度 | 高 | 中高 | 中 | 中高 |
 
-Node.js 版本采用零第三方运行时依赖的原生 ESM 实现，显式执行“意图路由 → 业务 Agent → 合规审查 → 汇总”流程。当前短期记忆和长期记忆分别使用带 TTL 的进程内 `Map` 与关键词检索，接口边界保持稳定，生产部署时可替换为 Redis、向量数据库和 LLM，而不影响 Supervisor 与 API 层。
+Node.js 版本采用LangGraph.js显式执行“意图路由 → 业务Agent → 合规审查 → 汇总”，并使用MemorySaver Checkpoint和节点重试。配置API Key后，ChatOpenAI参与意图、RAG、工单分析和二阶段合规；配置Redis与OTLP端点后分别启用分布式会话和真实Span导出。无外部服务时，各组件自动降级但图编排仍保持不变。
 
 ### 向量数据库对比
 
