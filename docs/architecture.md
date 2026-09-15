@@ -1,5 +1,7 @@
 # 架构设计文档
 
+> **Node.js 实现对照：**本文描述跨语言总体架构。需要把架构概念映射到 Node.js 的具体类、State 字段和十五步运行过程时，请阅读[Node.js Agent 全流程详细讲解](./node-agent-detailed-guide.md)。源码中的中文注释进一步解释了条件边、Reducer、Checkpoint、RAG、MCP 和 Span 的关联。
+
 ## 1. 系统总体架构
 
 ### 1.1 架构概览

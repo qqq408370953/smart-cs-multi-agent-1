@@ -1,5 +1,7 @@
 # 简历项目经历模板 — 智能客服多Agent系统
 
+> **真实性提醒（Node.js）：**只写自己能结合源码解释和演示的能力。Node.js 当前实现边界与完整调用链见[Node.js Agent 全流程详细讲解](../node-agent-detailed-guide.md)；不要把进程内 MemorySaver、内存工单、单事件 SSE 描述成已落地的生产级持久化或逐 Token 流式系统。
+
 > 根据不同岗位方向，提供多个版本的简历写法。采用STAR法则，突出量化成果。
 
 ---

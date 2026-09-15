@@ -1,3 +1,8 @@
+/*
+ * Agent Flow Lab 的纯展示样式。
+ * data-status、data-visible 等属性由 app.js 根据真实 API 结果设置；CSS 只负责把状态可视化，
+ * 不参与 LangGraph 条件路由，也不会决定某个 Agent 是否真正执行。
+ */
 :root {
   color-scheme: dark;
   --bg: #08100f;

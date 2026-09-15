@@ -1,6 +1,13 @@
 /**
  * MCP工具服务端的Node.js实现。
  * 支持工具注册/发现/调用、基础参数校验、JSON-RPC 2.0与调用日志。
+ *
+ * 术语关联：
+ * - MCP（Model Context Protocol）描述“有哪些工具、参数是什么、怎样调用”；
+ * - Agent 决定“何时、为何使用某种能力”；
+ * - LangGraph 决定“多个步骤以什么顺序执行”；
+ * - JSON-RPC 2.0 是当前 MCP HTTP 入口使用的请求/响应信封格式。
+ * 当前演示项目暴露了 MCP 工具，但业务 Agent 尚未通过模型自动选择这些工具。
  */
 export class MCPToolServer {
   #tools = new Map();
@@ -8,6 +15,7 @@ export class MCPToolServer {
 
   /** 注册工具并返回this，支持链式装配默认工具。 */
   register(tool) {
+    // name 用作唯一索引，handler 是实际执行函数；同名注册会覆盖旧工具。
     if (!tool?.name || typeof tool.handler !== "function") {
       throw new TypeError("MCP tool requires a name and handler");
     }
@@ -17,6 +25,7 @@ export class MCPToolServer {
 
   /** 返回不包含handler实现的公开工具Schema。 */
   listTools(category) {
+    // handler 是进程内函数，不属于协议 Schema，也不能序列化给远端客户端。
     return [...this.#tools.values()]
       .filter((tool) => !category || tool.category === category)
       .map(({ handler: _handler, inputSchema, ...tool }) => ({ ...tool, inputSchema }));
@@ -28,13 +37,16 @@ export class MCPToolServer {
     const startedAt = performance.now();
     let response;
     try {
+      // 工具不存在和参数不合法都转成统一 success:false 响应，而不是抛到 HTTP 层。
       if (!tool) throw new Error(`Tool '${name}' not found`);
       this.#validate(tool.inputSchema, arguments_);
+      // handler 可以是同步或异步函数，await 对两者都适用。
       response = { success: true, result: await tool.handler(arguments_), error: null };
     } catch (error) {
       response = { success: false, result: null, error: error.message };
     }
 
+    // 审计日志只保留结果摘要，不记录 arguments，避免未来把敏感参数写入日志。
     response.duration_ms = performance.now() - startedAt;
     this.#callLog.push({
       tool: name,
@@ -49,8 +61,10 @@ export class MCPToolServer {
 
   /** 处理MCP使用的JSON-RPC 2.0 ping/tools/list/tools/call请求。 */
   async handleJsonRpc(request) {
+    // JSON-RPC 的 id 用来让客户端把异步响应对应回原请求；通知请求可能没有 id。
     const id = request?.id ?? null;
     if (request?.jsonrpc !== "2.0") {
+      // -32600 和 -32601 是 JSON-RPC 标准错误码：无效请求、方法不存在。
       return { jsonrpc: "2.0", error: { code: -32600, message: "Invalid Request" }, id };
     }
     if (request.method === "ping") return { jsonrpc: "2.0", result: { status: "ok" }, id };
@@ -69,6 +83,7 @@ export class MCPToolServer {
   }
 
   #validate(schema, arguments_) {
+    // 当前只实现 required 校验，尚未覆盖类型、范围、additionalProperties 等完整 JSON Schema。
     for (const field of schema?.required ?? []) {
       if (arguments_[field] === undefined || arguments_[field] === "") {
         throw new Error(`Missing required argument: ${field}`);
@@ -82,6 +97,7 @@ export class MCPToolServer {
  * handler当前返回演示数据，生产环境应改为调用订单、知识库、工单和风控服务。
  */
 export function createDefaultTools(server, { ticketAgent } = {}) {
+  // 链式 register 返回同一个 server，最后得到已经注册四个工具的 MCPToolServer。
   return server
     .register({
       name: "order_query",

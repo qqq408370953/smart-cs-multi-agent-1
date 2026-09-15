@@ -1,5 +1,7 @@
 # 智能客服多Agent系统 — 企业级面试项目全攻略
 
+> **Node.js 落地索引：**本文解释项目规划与跨语言选型；Node.js 版本如何把规划落实为 StateGraph、专业 Agent、三层记忆、MCP 和 OpenTelemetry，见[Node.js Agent 全流程详细讲解](./node-agent-detailed-guide.md)。
+
 ## 一、调研结论：业界主流方案
 
 ### 1.1 参考的企业级开源项目

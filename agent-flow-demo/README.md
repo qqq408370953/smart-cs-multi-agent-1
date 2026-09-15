@@ -2,6 +2,8 @@
 
 面向学习者的智能客服Agent执行流程可视化客户端。它不复制后端业务逻辑，而是调用`node-impl`的真实API，再将一次完整请求拆成八个可观察步骤。
 
+术语和源码的完整关联讲解见[`docs/node-agent-detailed-guide.md`](../docs/node-agent-detailed-guide.md)。本 Demo 是观察工具：`POST /api/chat` 在后端仍会一次性跑完整张 LangGraph，页面上的八步是对同一份真实结果进行教学拆解，并不代表后端提供八个逐节点 API。
+
 ## 功能
 
 - 产品咨询、退款工单、账户安全、合规拦截四个场景按钮
@@ -68,3 +70,17 @@ http://localhost:8200
 `POST /api/chat`会在后端一次性执行完整LangGraph。前端为了教学，将同一次真实结果拆成多个观察阶段；它不会伪造不存在的逐节点HTTP接口。
 
 “会话记忆”步骤读取的是`GET /api/history/:sessionId`短期历史。LangGraph Checkpoint保存在后端`MemorySaver`中，目前没有公开HTTP查询入口，两者不要混为一谈。
+
+## 前端文件职责
+
+| 文件 | 职责 | 与 Agent 的关系 |
+| --- | --- | --- |
+| `server.js` | Node 原生静态文件服务器，监听 8200 | 不执行 Agent，只发送 `dist/` 文件 |
+| `dist/app.js` | 调用 8100 API、维护教学 UI State、拆分观察阶段 | 展示真实结果，但不复制后端业务节点 |
+| `dist/lessons.js` | 八课讲解数据、概念和源码定位 | 解释 Agent，不参与请求决策 |
+| `dist/index.html` | 页面语义结构 | 承载观察面板和学习弹窗 |
+| `dist/styles.css` | 流程节点和状态样式 | 只做展示，不控制 LangGraph |
+| `.openai/hosting.json` | 静态托管目录配置 | JSON 不支持注释，字段保持机器可读 |
+| `package.json` | `npm start`/`npm run check` 脚本和 Node 版本 | JSON 不支持注释，因此在本表说明 |
+
+前端 `state` 变量是教学页面为了逐步展示而构造的 UI 数据，不是后端 `AgentStateSchema` 的直接远程快照；后端当前没有暴露逐节点 State 查询 API。

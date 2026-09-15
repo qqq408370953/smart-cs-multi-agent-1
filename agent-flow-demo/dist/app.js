@@ -1,5 +1,6 @@
 import { getLesson, learningPhases } from "./lessons.js";
 
+// 教学前端不实现业务规则。这些场景只提供可重复输入，真实 intent 和回答来自 8100 后端。
 const scenarios = [
   { id: "knowledge", label: "产品咨询", message: "理财产品的投资期限是多久？" },
   { id: "ticket", label: "退款工单", message: "我购买后想申请退款，请帮我创建工单" },
@@ -7,6 +8,7 @@ const scenarios = [
   { id: "blocked", label: "合规拦截", message: "我要投诉，你们宣传这个产品保证收益" },
 ];
 
+// 八个“观察步骤”是教学视图；一次 POST /api/chat 仍会在后端原子地执行完整 LangGraph。
 const steps = [
   { id: "api", title: "连接API", subtitle: "GET /health", lesson: "确认后端版本和LangGraph编排状态。" },
   { id: "state", title: "创建State", subtitle: "构造共享数据", lesson: "State是所有节点共同读写的数据总线。" },
@@ -18,6 +20,7 @@ const steps = [
   { id: "observe", title: "观察指标与工具", subtitle: "Metrics + MCP", lesson: "通过证据判断Agent调用、耗时以及可发现的外部工具。" },
 ];
 
+// 启动时缓存 DOM 引用，避免每次渲染都重复查询同一元素。
 const elements = {
   apiBase: document.querySelector("#apiBase"),
   checkButton: document.querySelector("#checkButton"),
@@ -48,6 +51,7 @@ const elements = {
   lessonExecuteButton: document.querySelector("#lessonExecuteButton"),
 };
 
+// 以下是纯前端 UI State，不等同于后端的 AgentStateSchema。
 let selectedScenario = scenarios[0];
 let currentStep = 0;
 let activeTab = "state";
@@ -60,6 +64,7 @@ let runGeneration = 0;
 let lessonIndex = 0;
 
 function createSessionId() {
+  // 每次重置生成新会话，避免前一次短期历史影响本次教学观察。
   return `flow-demo-${Date.now().toString(36)}`;
 }
 
@@ -89,6 +94,7 @@ function escapeHtml(value) {
 }
 
 async function request(path, options) {
+  // 统一处理 API 基址、JSON 解析和非 2xx 错误。
   const response = await fetch(apiUrl(path), options);
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
@@ -96,6 +102,7 @@ async function request(path, options) {
 }
 
 function estimateIntent(message) {
+  // 仅用于真实 /api/chat 调用前预测流程图高亮；最终判断仍以后端 body.intent 为准。
   const ticketWords = ["退款", "退货", "理赔", "投诉", "开户", "申请", "办理", "工单", "申诉", "注销"];
   const securityWords = ["举报", "欺诈", "盗刷", "异常", "安全", "违规", "泄露", "风险"];
   const ticketScore = ticketWords.filter((word) => message.includes(word)).length;
@@ -134,6 +141,7 @@ function renderSteps() {
 }
 
 function renderFlow() {
+  // 只高亮实际选择的业务分支，其余分支置灰，帮助观察 LangGraph 条件边。
   const nodeOrder = ["api", "state", "intent", activeBusinessNode(), "compliance", "response", "memory", "observe"];
   document.querySelectorAll(".flow-node").forEach((node) => {
     const nodeName = node.dataset.node;

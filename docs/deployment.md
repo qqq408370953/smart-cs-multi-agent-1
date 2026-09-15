@@ -1,5 +1,7 @@
 # 部署指南
 
+> **Node.js 部署与 Agent 运行的关系：**环境变量决定 LLM、Embedding、Redis 和 OTLP 是否启用，但不改变 LangGraph 的基本节点顺序。各依赖失败时的降级路径、进程内存储边界和健康检查含义见[Node.js Agent 全流程详细讲解](./node-agent-detailed-guide.md#16-当前实现边界)。
+
 ## 1. 本地开发环境
 
 ### Python版本

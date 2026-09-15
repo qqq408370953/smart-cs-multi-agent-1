@@ -2,6 +2,8 @@
 
 > **企业级面试项目全攻略** — 面向金融/电商场景，包含 Python / Java / Go / Node.js 四语言完整实现 + 配套面试材料，从零到面试一站搞定。
 
+> **Node.js 深度学习入口：**如果你希望逐步理解 Agent 在 Node.js 中如何完成路由、RAG、工单、合规、记忆、MCP 和追踪，请先阅读 [`docs/node-agent-detailed-guide.md`](./docs/node-agent-detailed-guide.md)，再按 [`docs/node-learning-roadmap.md`](./docs/node-learning-roadmap.md) 动手。`node-impl/src/` 中已加入详细中文关联注释。
+
 [![Python](https://img.shields.io/badge/Python-3.11+-blue?logo=python)](https://www.python.org/)
 [![Java](https://img.shields.io/badge/Java-17+-orange?logo=openjdk)](https://openjdk.org/)
 [![Go](https://img.shields.io/badge/Go-1.22+-00ADD8?logo=go)](https://golang.org/)

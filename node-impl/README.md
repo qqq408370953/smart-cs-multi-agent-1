@@ -2,6 +2,16 @@
 
 智能客服多 Agent 系统的 Node.js 版本。它与 Python、Java、Go 版本保持相同的核心业务边界，实现 LangGraph.js Supervisor 编排、意图路由、RAG 检索、工单处理、两阶段合规审查、分层记忆、MCP JSON-RPC、OpenTelemetry 和 SSE 接口。
 
+## 中文深度学习入口
+
+如果目标是理解每个 Agent 的每一步，不建议只按文件从上到下读。请配合以下资料：
+
+1. [Node.js Agent 全流程详细讲解](../docs/node-agent-detailed-guide.md)：术语、十五步请求链路、State 变化和各 Agent 关联知识。
+2. [Node.js Agent 项目学习路线](../docs/node-learning-roadmap.md)：十二步动手课程和掌握标准。
+3. `agent-flow-demo/`：用真实 API 将一次完整请求拆成八个可观察阶段。
+
+源码已经补充中文行内注释。注释重点解释输入/输出、State 修改、设计原因、失败降级，以及与 LangGraph、RAG、MCP、Memory 和 OpenTelemetry 的关系。
+
 ## 设计定位
 
 Node.js 版本面向 Web 全栈、BFF 和 JavaScript/TypeScript 团队：
@@ -100,6 +110,28 @@ curl -X POST http://localhost:8100/api/chat \
 | `SHORT_TERM_TTL_SECONDS` | `1800` | 会话TTL |
 | `OTEL_SERVICE_NAME` | `smart-cs-node` | OpenTelemetry服务名 |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | 空 | 配置后启用OTLP HTTP Span导出 |
+
+## package.json 与运行脚本说明
+
+JSON 标准不允许写注释，所以 `package.json` 和 `package-lock.json` 不直接加入行内注释：
+
+- `type: module`：启用原生 ESM，源码使用 `import/export`。
+- `engines.node >= 20`：声明本地最低 Node.js 版本；Dockerfile 当前使用 Node 22 Alpine。
+- `start`：普通启动，执行 `src/main.js`。
+- `dev`：使用 Node `--watch`，源码变化后自动重启。
+- `test`：使用 Node 内置 `node:test`，不依赖 Jest。
+- `package-lock.json`：锁定完整依赖树和校验值，应该由 npm 维护，不应手工添加说明字段。
+
+主要依赖的职责：
+
+| 依赖 | 与 Agent 的关系 |
+| --- | --- |
+| `@langchain/langgraph` | StateSchema、节点、边、Checkpoint 和整图执行 |
+| `@langchain/core` | HumanMessage、AIMessage 等标准消息对象 |
+| `@langchain/openai` | 可选 Chat LLM 与 Embedding 客户端 |
+| `zod` | 校验 State 和 LLM 结构化输出 |
+| `redis` | 可选短期会话历史存储 |
+| `@opentelemetry/*` | 创建、聚合并导出 Agent Span |
 
 ## 测试
 

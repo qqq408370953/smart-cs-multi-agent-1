@@ -1,6 +1,9 @@
+// 课程数据与 UI 渲染分离：本文件描述知识点，app.js 负责交互和真实 API 请求。
 const githubRoot = "https://github.com/qqq408370953/smart-cs-multi-agent-1/blob/main/node-impl";
 
 function source(file, lines, title, code) {
+  // 生成源码卡片及 GitHub 深链。lines 用于教学提示，源文件增加注释后可能产生少量偏移；
+  // 跳转后建议按卡片中的方法名搜索，而不是只依赖绝对行号。
   const firstLine = lines.match(/\d+/)?.[0] || "1";
   return {
     file: `node-impl/${file}`,
@@ -36,7 +39,7 @@ const lessons = [
       ["健康检查", "证明进程可响应；它不等于Redis、LLM、OTLP等外部依赖全部健康。"],
       ["CORS", "后端允许本地前端跨端口访问API，配置位于统一JSON响应头。"],
     ],
-    sources: [source("src/api/server.js", "39—60", "HTTP服务与健康路由", `export function createApiServer(...) {
+    sources: [source("src/api/server.js", "46—72", "HTTP服务与健康路由", `export function createApiServer(...) {
   return createServer(async (request, response) => {
     if (request.method === "GET" && url.pathname === "/health") {
       return sendJson(response, 200, {
@@ -70,7 +73,7 @@ const lessons = [
       ["共享黑板", "sub_results收集各Agent结果，Agent不需要彼此直接引用。"],
     ],
     sources: [
-      source("src/agents/state.js", "5—35", "State Schema与初始值", `export const AgentStateSchema = new StateSchema({
+      source("src/agents/state.js", "6—66", "State Schema与初始值", `export const AgentStateSchema = new StateSchema({
   messages: MessagesValue,
   user_id: z.string(),
   session_id: z.string(),
@@ -79,7 +82,7 @@ const lessons = [
   compliance_passed: z.boolean().default(true),
   final_response: z.string().default(""),
 });`),
-      source("src/api/server.js", "97—102", "请求转为State并进入图", `const sessionId = body.session_id || randomUUID();
+      source("src/api/server.js", "115—124", "请求转为State并进入图", `const sessionId = body.session_id || randomUUID();
 const userId = body.user_id || "anonymous";
 await shortTermMemory.addMessage(sessionId, "user", body.message);
 const state = createState(userId, sessionId, body.message);
@@ -108,7 +111,7 @@ const result = await supervisor.orchestrate(state);`),
       ["条件边", "图结构根据State中的intent选择唯一业务分支。"],
     ],
     sources: [
-      source("src/agents/intent-router.js", "4—58", "LLM分类与规则兜底", `if (this.llm) {
+      source("src/agents/intent-router.js", "8—78", "LLM分类与规则兜底", `if (this.llm) {
   const classifier = this.llm.withStructuredOutput(schema, {
     name: "intent_result",
   });
@@ -118,7 +121,7 @@ const result = await supervisor.orchestrate(state);`),
 
 // LLM不可用时按关键词计分
 state.intent = intent;`),
-      source("src/agents/supervisor.js", "65—70", "Intent到节点的条件边", `.addConditionalEdges("intent_router", (state) => state.intent, {
+      source("src/agents/supervisor.js", "83—90", "Intent到节点的条件边", `.addConditionalEdges("intent_router", (state) => state.intent, {
   knowledge_rag: "knowledge_rag",
   ticket_handler: "ticket_handler",
   compliance_checker: "security_handler",
@@ -146,7 +149,7 @@ state.intent = intent;`),
       ["RAG", "先检索可信资料再生成回答，减少无依据回答。"],
       ["RetryPolicy", "知识和工单节点最多尝试2次，应对短暂外部调用错误。"],
     ],
-    sources: [source("src/agents/knowledge-rag.js", "61—79", "Knowledge RAG主流程", `const rewrittenQuery = await this.rewriteQuery(state.user_message);
+    sources: [source("src/agents/knowledge-rag.js", "78—105", "Knowledge RAG主流程", `const rewrittenQuery = await this.rewriteQuery(state.user_message);
 documents = await this.longTermMemory.search(rewrittenQuery, 5);
 documents = await this.rerankDocuments(rewrittenQuery, documents, 3);
 answer = await this.generateAnswer(state.user_message, documents);
@@ -174,7 +177,7 @@ state.sub_results.knowledge_rag = answer;`)],
       ["Fail-closed", "确认违规时不暴露原业务内容，统一返回转人工安全响应。"],
     ],
     sources: [
-      source("src/agents/compliance-checker.js", "23—97", "规则与LLM两阶段审查", `const ruleResult = this.check(content);
+      source("src/agents/compliance-checker.js", "27—125", "规则与LLM两阶段审查", `const ruleResult = this.check(content);
 if (!ruleResult.passed || !this.llm) return ruleResult;
 
 const llmResult = await reviewer.invoke(messages);
@@ -184,7 +187,7 @@ state.sub_results.compliance = {
   risk_level: result.risk_level,
   violations: result.violations,
 };`),
-      source("src/agents/supervisor.js", "71—75", "全部业务分支汇聚到合规", `.addEdge("knowledge_rag", "compliance_check")
+      source("src/agents/supervisor.js", "91—97", "全部业务分支汇聚到合规", `.addEdge("knowledge_rag", "compliance_check")
 .addEdge("ticket_handler", "compliance_check")
 .addEdge("security_handler", "compliance_check")
 .addEdge("compliance_check", "synthesize")`),
@@ -212,7 +215,7 @@ state.sub_results.compliance = {
       ["API DTO", "HTTP响应只暴露调用方需要的字段，而不是整个内部State。"],
     ],
     sources: [
-      source("src/agents/supervisor.js", "57—63, 88—98", "合成节点与安全响应", `.addNode("synthesize", (state) => ({
+      source("src/agents/supervisor.js", "73—80, 111—121", "合成节点与安全响应", `.addNode("synthesize", (state) => ({
   current_agent: "supervisor",
   final_response: this.synthesize(state),
   messages: [new AIMessage(finalResponse)],
@@ -221,7 +224,7 @@ state.sub_results.compliance = {
 if (!state.compliance_passed) {
   return "抱歉，您的请求涉及敏感内容，已转交人工客服处理。";
 }`),
-      source("src/api/server.js", "104—123", "最终HTTP响应字段", `const payload = {
+      source("src/api/server.js", "126—151", "最终HTTP响应字段", `const payload = {
   response: result.final_response,
   session_id: sessionId,
   intent: result.intent,
@@ -251,7 +254,7 @@ if (!state.compliance_passed) {
       ["thread_id", "LangGraph识别同一状态线程的键，本项目使用session_id。"],
     ],
     sources: [
-      source("src/memory/short-term.js", "20—51", "Redis/Map消息读写", `const redis = await this.#getRedis();
+      source("src/memory/short-term.js", "21—66", "Redis/Map消息读写", `const redis = await this.#getRedis();
 if (redis) {
   await redis.rPush(key, JSON.stringify(message));
   await redis.lTrim(key, -this.maxTurns, -1);
@@ -259,7 +262,7 @@ if (redis) {
 }
 
 const raw = await redis.lRange(key, -count, -1);`),
-      source("src/agents/supervisor.js", "23, 77, 80—85", "MemorySaver与thread_id", `this.checkpointer = checkpointer ?? new MemorySaver();
+      source("src/agents/supervisor.js", "31—33, 98—107", "MemorySaver与thread_id", `this.checkpointer = checkpointer ?? new MemorySaver();
 return graph.compile({ checkpointer: this.checkpointer });
 
 return this.graph.invoke(state, {
@@ -289,7 +292,7 @@ return this.graph.invoke(state, {
       ["MCP工具", "用名称、描述和输入Schema描述外部能力，调用逻辑与Agent编排解耦。"],
     ],
     sources: [
-      source("src/tracing/tracer.js", "34—85", "真实Span与本地指标", `return tracer.startActiveSpan(name, async (span) => {
+      source("src/tracing/tracer.js", "39—94", "真实Span与本地指标", `return tracer.startActiveSpan(name, async (span) => {
   try {
     const result = await operation();
     span.setStatus({ code: SpanStatusCode.OK });
@@ -299,7 +302,7 @@ return this.graph.invoke(state, {
     span.end();
   }
 });`),
-      source("src/mcp/server.js", "9—64", "工具注册、发现与调用", `register(tool) {
+      source("src/mcp/server.js", "17—90", "工具注册、发现与调用", `register(tool) {
   this.#tools.set(tool.name, tool);
   return this;
 }
@@ -318,7 +321,7 @@ const businessSources = {
   knowledge_rag: {
     title: "当前分支：Knowledge RAG",
     description: "产品咨询会经过Query改写、召回、重排和回答生成。无LLM时保留关键词检索与模板回答。",
-    source: source("src/agents/knowledge-rag.js", "61—79", "Knowledge RAG主流程", `const rewrittenQuery = await this.rewriteQuery(state.user_message);
+    source: source("src/agents/knowledge-rag.js", "78—105", "Knowledge RAG主流程", `const rewrittenQuery = await this.rewriteQuery(state.user_message);
 documents = await this.longTermMemory.search(rewrittenQuery, 5);
 documents = await this.rerankDocuments(rewrittenQuery, documents, 3);
 answer = await this.generateAnswer(state.user_message, documents);`),
@@ -326,7 +329,7 @@ answer = await this.generateAnswer(state.user_message, documents);`),
   ticket_handler: {
     title: "当前分支：Ticket Agent",
     description: "退款、投诉等请求先分析create/query/update动作，再更新内存工单并把结果写入sub_results。",
-    source: source("src/agents/ticket-handler.js", "54—116", "工单分析与创建/查询/更新", `info = await this.analyzeRequest(state.user_message);
+    source: source("src/agents/ticket-handler.js", "80—124", "工单分析与创建/查询/更新", `info = await this.analyzeRequest(state.user_message);
 if (info.action === "query") return this.getTicket(info.ticket_id);
 if (info.action === "update") return this.updateStatus(info.ticket_id, info.status);
 const ticket = this.createTicket(state.user_id, info.summary, info.priority);`),
@@ -334,7 +337,7 @@ const ticket = this.createTicket(state.user_id, info.summary, info.priority);`),
   compliance_checker: {
     title: "当前分支：Security Handler",
     description: "盗刷、欺诈和账户安全请求不做普通知识回答，而是生成安全操作提示，再进入统一合规节点。",
-    source: source("src/agents/supervisor.js", "46—52", "安全请求专用节点", `.addNode("security_handler", (state) => ({
+    source: source("src/agents/supervisor.js", "60—67", "安全请求专用节点", `.addNode("security_handler", (state) => ({
   current_agent: "security_handler",
   sub_results: {
     ...state.sub_results,

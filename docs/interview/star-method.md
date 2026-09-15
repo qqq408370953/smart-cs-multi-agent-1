@@ -1,5 +1,7 @@
 # STAR面试话术 — 智能客服多Agent系统
 
+> **Node.js 讲解准备：**使用 STAR 话术前，请先根据[Node.js Agent 全流程详细讲解](../node-agent-detailed-guide.md)跑通一次真实请求。讲行动时对应到实际 State、节点、条件边、降级和测试；讲结果时区分已由代码验证的结果与未来生产化目标。
+
 > 面试时用STAR法则（Situation → Task → Action → Result）回答项目问题。
 > 以下提供多个场景的完整话术模板，可直接背诵后灵活调整。
 

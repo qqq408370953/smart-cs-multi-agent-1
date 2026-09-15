@@ -1,5 +1,7 @@
 # 八股文题库 — 多Agent系统 & RAG & 大模型应用
 
+> **Node.js 项目对照：**回答下列概念题时，应区分通用理论与仓库当前实现。具体代码证据、降级策略和实现边界见[Node.js Agent 全流程详细讲解](../node-agent-detailed-guide.md)，尤其注意 Agent 不等于 LLM、MCP 不等于 LangGraph、聊天历史不等于 Checkpoint。
+
 > 30+高频面试题，每题配详细答案和追问应对。按主题分类，从基础到进阶。
 
 ---
